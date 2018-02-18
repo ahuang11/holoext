@@ -1,0 +1,520 @@
+
+<script src="https://cdn.pydata.org/bokeh/release/bokeh-0.12.14.min.js" type="text/javascript"></script>
+<script src="https://cdn.pydata.org/bokeh/release/bokeh-widgets-0.12.14.min.js" type="text/javascript"></script>
+<script src="https://cdn.pydata.org/bokeh/release/bokeh-tables-0.12.14.min.js" type="text/javascript"></script>
+<script src="https://cdn.pydata.org/bokeh/release/bokeh-gl-0.12.14.min.js" type="text/javascript"></script>
+<script src="https://code.jquery.com/jquery-2.1.4.min.js" type="text/javascript"></script>
+<script src="https://code.jquery.com/ui/1.10.4/jquery-ui.min.js" type="text/javascript"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.1.20/require.min.js" type="text/javascript"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js" type="text/javascript"></script>
+<script type="text/javascript">function HoloViewsWidget(){
+}
+
+HoloViewsWidget.comms = {};
+HoloViewsWidget.comm_state = {};
+
+HoloViewsWidget.prototype.init_slider = function(init_val){
+  if(this.load_json) {
+    this.from_json()
+  } else {
+    this.update_cache();
+  }
+}
+
+HoloViewsWidget.prototype.populate_cache = function(idx){
+  this.cache[idx].html(this.frames[idx]);
+  if (this.embed) {
+    delete this.frames[idx];
+  }
+}
+
+HoloViewsWidget.prototype.process_error = function(msg){
+
+}
+
+HoloViewsWidget.prototype.from_json = function() {
+  var data_url = this.json_path + this.id + '.json';
+  $.getJSON(data_url, $.proxy(function(json_data) {
+    this.frames = json_data;
+    this.update_cache();
+    this.update(0);
+  }, this));
+}
+
+HoloViewsWidget.prototype.dynamic_update = function(current){
+  if (current === undefined) {
+    return
+  }
+  if(this.dynamic) {
+    current = JSON.stringify(current);
+  }
+  function callback(initialized, msg){
+    /* This callback receives data from Python as a string
+       in order to parse it correctly quotes are sliced off*/
+    if (msg.content.ename != undefined) {
+      this.process_error(msg);
+    }
+    if (msg.msg_type != "execute_result") {
+      console.log("Warning: HoloViews callback returned unexpected data for key: (", current, ") with the following content:", msg.content)
+    } else {
+      if (msg.content.data['text/plain'].includes('Complete')) {
+        if (this.queue.length > 0) {
+          this.time = Date.now();
+          this.dynamic_update(this.queue[this.queue.length-1]);
+          this.queue = [];
+        } else {
+          this.wait = false;
+        }
+        return
+      }
+    }
+  }
+  this.current = current;
+  if ((window.Jupyter !== undefined) && (Jupyter.notebook.kernel != null)) {
+    var kernel = Jupyter.notebook.kernel;
+    callbacks = {iopub: {output: $.proxy(callback, this, this.initialized)}};
+    var cmd = "holoviews.plotting.widgets.NdWidget.widgets['" + this.id + "'].update(" + current + ")";
+    kernel.execute("import holoviews;" + cmd, callbacks, {silent : false});
+  }
+}
+
+HoloViewsWidget.prototype.update_cache = function(force){
+  var frame_len = Object.keys(this.frames).length;
+  for (var i=0; i<frame_len; i++) {
+    if(!this.load_json || this.dynamic)  {
+      frame = Object.keys(this.frames)[i];
+    } else {
+      frame = i;
+    }
+    if(!(frame in this.cache) || force) {
+      if ((frame in this.cache) && force) { this.cache[frame].remove() }
+      this.cache[frame] = $('<div />').appendTo("#"+"_anim_img"+this.id).hide();
+      var cache_id = "_anim_img"+this.id+"_"+frame;
+      this.cache[frame].attr("id", cache_id);
+      this.populate_cache(frame);
+    }
+  }
+}
+
+HoloViewsWidget.prototype.update = function(current){
+  if(current in this.cache) {
+    $.each(this.cache, function(index, value) {
+      value.hide();
+    });
+    this.cache[current].show();
+    this.wait = false;
+  }
+}
+
+HoloViewsWidget.prototype.init_comms = function() {
+  if ((window.Jupyter !== undefined) && (Jupyter.notebook.kernel !== undefined)) {
+    var widget = this;
+    comm_manager = Jupyter.notebook.kernel.comm_manager;
+    comm_manager.register_target(this.id, function (comm) {
+      comm.on_msg(function (msg) { widget.process_msg(msg) });
+    });
+  }
+}
+
+HoloViewsWidget.prototype.process_msg = function(msg) {
+}
+
+function SelectionWidget(frames, id, slider_ids, keyMap, dim_vals, notFound, load_json, mode, cached, json_path, dynamic){
+  this.frames = frames;
+  this.id = id;
+  this.slider_ids = slider_ids;
+  this.keyMap = keyMap
+  this.current_frame = 0;
+  this.current_vals = dim_vals;
+  this.load_json = load_json;
+  this.mode = mode;
+  this.notFound = notFound;
+  this.cached = cached;
+  this.dynamic = dynamic;
+  this.cache = {};
+  this.json_path = json_path;
+  this.init_slider(this.current_vals[0]);
+  this.queue = [];
+  this.wait = false;
+  if (!this.cached || this.dynamic) {
+    this.init_comms()
+  }
+}
+
+SelectionWidget.prototype = new HoloViewsWidget;
+
+
+SelectionWidget.prototype.get_key = function(current_vals) {
+  var key = "(";
+  for (var i=0; i<this.slider_ids.length; i++)
+  {
+    val = this.current_vals[i];
+    if (!(typeof val === 'string')) {
+      if (val % 1 === 0) { val = val.toFixed(1); }
+      else { val = val.toFixed(10); val = val.slice(0, val.length-1);}
+    }
+    key += "'" + val + "'";
+    if(i != this.slider_ids.length-1) { key += ', ';}
+    else if(this.slider_ids.length == 1) { key += ',';}
+  }
+  key += ")";
+  return this.keyMap[key];
+}
+
+SelectionWidget.prototype.set_frame = function(dim_val, dim_idx){
+  this.current_vals[dim_idx] = dim_val;
+  var key = this.current_vals;
+  if (!this.dynamic) {
+    key = this.get_key(key)
+  }
+  if (this.dynamic || !this.cached) {
+    if ((this.time !== undefined) && ((this.wait) && ((this.time + 10000) > Date.now()))) {
+      this.queue.push(key);
+      return
+    }
+    this.queue = [];
+    this.time = Date.now();
+    this.current_frame = key;
+    this.wait = true;
+    this.dynamic_update(key)
+  } else if (key !== undefined) {
+    this.update(key)
+  }
+}
+
+
+/* Define the ScrubberWidget class */
+function ScrubberWidget(frames, num_frames, id, interval, load_json, mode, cached, json_path, dynamic){
+  this.slider_id = "_anim_slider" + id;
+  this.loop_select_id = "_anim_loop_select" + id;
+  this.id = id;
+  this.interval = interval;
+  this.current_frame = 0;
+  this.direction = 0;
+  this.dynamic = dynamic;
+  this.timer = null;
+  this.load_json = load_json;
+  this.mode = mode;
+  this.cached = cached;
+  this.frames = frames;
+  this.cache = {};
+  this.length = num_frames;
+  this.json_path = json_path;
+  document.getElementById(this.slider_id).max = this.length - 1;
+  this.init_slider(0);
+  this.wait = false;
+  this.queue = [];
+  if (!this.cached || this.dynamic) {
+    this.init_comms()
+  }
+}
+
+ScrubberWidget.prototype = new HoloViewsWidget;
+
+ScrubberWidget.prototype.set_frame = function(frame){
+  this.current_frame = frame;
+  widget = document.getElementById(this.slider_id);
+  if (widget === null) {
+    this.pause_animation();
+    return
+  }
+  widget.value = this.current_frame;
+  if(this.cached) {
+    this.update(frame)
+  } else {
+    this.dynamic_update(frame)
+  }
+}
+
+
+ScrubberWidget.prototype.get_loop_state = function(){
+  var button_group = document[this.loop_select_id].state;
+  for (var i = 0; i < button_group.length; i++) {
+    var button = button_group[i];
+    if (button.checked) {
+      return button.value;
+    }
+  }
+  return undefined;
+}
+
+
+ScrubberWidget.prototype.next_frame = function() {
+  this.set_frame(Math.min(this.length - 1, this.current_frame + 1));
+}
+
+ScrubberWidget.prototype.previous_frame = function() {
+  this.set_frame(Math.max(0, this.current_frame - 1));
+}
+
+ScrubberWidget.prototype.first_frame = function() {
+  this.set_frame(0);
+}
+
+ScrubberWidget.prototype.last_frame = function() {
+  this.set_frame(this.length - 1);
+}
+
+ScrubberWidget.prototype.slower = function() {
+  this.interval /= 0.7;
+  if(this.direction > 0){this.play_animation();}
+  else if(this.direction < 0){this.reverse_animation();}
+}
+
+ScrubberWidget.prototype.faster = function() {
+  this.interval *= 0.7;
+  if(this.direction > 0){this.play_animation();}
+  else if(this.direction < 0){this.reverse_animation();}
+}
+
+ScrubberWidget.prototype.anim_step_forward = function() {
+  if(this.current_frame < this.length - 1){
+    this.next_frame();
+  }else{
+    var loop_state = this.get_loop_state();
+    if(loop_state == "loop"){
+      this.first_frame();
+    }else if(loop_state == "reflect"){
+      this.last_frame();
+      this.reverse_animation();
+    }else{
+      this.pause_animation();
+      this.last_frame();
+    }
+  }
+}
+
+ScrubberWidget.prototype.anim_step_reverse = function() {
+  if(this.current_frame > 0){
+    this.previous_frame();
+  } else {
+    var loop_state = this.get_loop_state();
+    if(loop_state == "loop"){
+      this.last_frame();
+    }else if(loop_state == "reflect"){
+      this.first_frame();
+      this.play_animation();
+    }else{
+      this.pause_animation();
+      this.first_frame();
+    }
+  }
+}
+
+ScrubberWidget.prototype.pause_animation = function() {
+  this.direction = 0;
+  if (this.timer){
+    clearInterval(this.timer);
+    this.timer = null;
+  }
+}
+
+ScrubberWidget.prototype.play_animation = function() {
+  this.pause_animation();
+  this.direction = 1;
+  var t = this;
+  if (!this.timer) this.timer = setInterval(function(){t.anim_step_forward();}, this.interval);
+}
+
+ScrubberWidget.prototype.reverse_animation = function() {
+  this.pause_animation();
+  this.direction = -1;
+  var t = this;
+  if (!this.timer) this.timer = setInterval(function(){t.anim_step_reverse();}, this.interval);
+}
+
+function extend(destination, source) {
+  for (var k in source) {
+    if (source.hasOwnProperty(k)) {
+      destination[k] = source[k];
+    }
+  }
+  return destination;
+}
+
+function update_widget(widget, values) {
+  if (widget.hasClass("ui-slider")) {
+    widget.slider('option', {
+      min: 0,
+      max: values.length-1,
+      dim_vals: values,
+      value: 0,
+      dim_labels: values
+	})
+    widget.slider('option', 'slide').call(widget, event, {value: 0})
+  } else {
+    widget.empty();
+    for (var i=0; i<values.length; i++){
+      widget.append($("<option>", {
+        value: i,
+        text: values[i]
+      }))
+    };
+    widget.data('values', values);
+    widget.data('value', 0);
+    widget.trigger("change");
+  };
+}
+
+// Define Bokeh specific subclasses
+function BokehSelectionWidget() {
+	SelectionWidget.apply(this, arguments);
+}
+
+function BokehScrubberWidget() {
+	ScrubberWidget.apply(this, arguments);
+}
+
+// Let them inherit from the baseclasses
+BokehSelectionWidget.prototype = Object.create(SelectionWidget.prototype);
+BokehScrubberWidget.prototype = Object.create(ScrubberWidget.prototype);
+
+// Define methods to override on widgets
+var BokehMethods = {
+	update_cache : function(){
+		$.each(this.frames, $.proxy(function(index, frame) {
+			this.frames[index] = JSON.parse(frame);
+		}, this));
+	},
+	update : function(current){
+		if (current === undefined) {
+			var data = undefined;
+		} else {
+			var data = this.frames[current];
+		}
+		if (data !== undefined) {
+			var doc = Bokeh.index[data.root].model.document;
+			doc.apply_json_patch(data.content);
+		}
+	},
+	init_comms : function() {
+	}
+}
+
+// Extend Bokeh widgets with backend specific methods
+extend(BokehSelectionWidget.prototype, BokehMethods);
+extend(BokehScrubberWidget.prototype, BokehMethods);
+</script>
+
+<link rel="stylesheet" href="https://cdn.pydata.org/bokeh/release/bokeh-0.12.14.min.css">
+<link rel="stylesheet" href="https://cdn.pydata.org/bokeh/release/bokeh-widgets-0.12.14.min.css">
+<link rel="stylesheet" href="https://cdn.pydata.org/bokeh/release/bokeh-tables-0.12.14.min.css">
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://code.jquery.com/ui/1.10.4/themes/smoothness/jquery-ui.css">
+<style>div.bk-hbox {
+    display: flex;
+    justify-content: center;
+}
+
+div.bk-hbox div.bk-plot {
+    padding: 8px;
+}
+
+div.bk-hbox div.bk-data-table {
+    padding: 20px;
+}
+
+div.hololayout {
+    display: flex;
+    align-items: center;
+    margin: 0;
+}
+
+div.holoframe {
+	width: 75%;
+}
+
+div.holowell {
+    display: flex;
+    align-items: center;
+    margin: 0;
+}
+
+form.holoform {
+    background-color: #fafafa;
+    border-radius: 5px;
+    overflow: hidden;
+	padding-left: 0.8em;
+    padding-right: 0.8em;
+    padding-top: 0.4em;
+    padding-bottom: 0.4em;
+}
+
+div.holowidgets {
+    padding-right: 0;
+	width: 25%;
+}
+
+div.holoslider {
+    min-height: 0 !important;
+    height: 0.8em;
+    width: 60%;
+}
+
+div.holoformgroup {
+    padding-top: 0.5em;
+    margin-bottom: 0.5em;
+}
+
+div.hologroup {
+    padding-left: 0;
+    padding-right: 0.8em;
+    width: 50%;
+}
+
+.holoselect {
+    width: 92%;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.holotext {
+    width: 100%;
+    padding-left:  0.5em;
+    padding-right: 0;
+}
+
+.holowidgets .ui-resizable-se {
+	visibility: hidden
+}
+
+.holoframe > .ui-resizable-se {
+	visibility: hidden
+}
+
+.holowidgets .ui-resizable-s {
+	visibility: hidden
+}
+</style><div style='display: table; margin: 0 auto;'>
+
+<div class="bk-root">
+    <div class="bk-plotdiv" id="e278f016-3588-4f02-9e0c-c7ab39ec30ec"></div>
+</div>
+<script type="text/javascript">
+  (function(root) {
+  function embed_document(root) {
+    
+  var docs_json = {"610268f8-e3ed-4d7d-94fd-28e0a0d0b792":{"roots":{"references":[{"attributes":{"plot":{"id":"eec89a8f-7e4c-4308-9bd1-26424f19b3b8","subtype":"Figure","type":"Plot"},"ticker":{"id":"b730bdfc-168c-41f3-be16-c48a713315fd","type":"DatetimeTicker"}},"id":"40335f60-a9ea-4e40-a4b1-8617ca0a14e8","type":"Grid"},{"attributes":{"base":60,"mantissas":[1,2,5,10,15,20,30],"max_interval":1800000.0,"min_interval":1000.0,"num_minor_ticks":0},"id":"46adff45-675f-44e7-bf26-48d835cc7f8d","type":"AdaptiveTicker"},{"attributes":{"dimensions":"width"},"id":"6fdf3f1f-4f37-449c-aabc-3498b0eb868e","type":"WheelZoomTool"},{"attributes":{"axis_label":"Date","axis_label_text_alpha":{"value":0.925},"axis_label_text_color":{"value":"#5b5b5b"},"axis_label_text_font":"arial","axis_label_text_font_size":{"value":"1.2em"},"axis_label_text_font_style":"normal","axis_line_alpha":{"value":0},"bounds":"auto","formatter":{"id":"dc3005ef-8b13-4e57-bcd1-1867c3c8e6a6","type":"DatetimeTickFormatter"},"major_label_orientation":"horizontal","major_label_text_alpha":{"value":0.925},"major_label_text_color":{"value":"#5b5b5b"},"major_label_text_font_size":{"value":"1.05em"},"major_tick_line_alpha":{"value":0},"minor_tick_line_alpha":{"value":0},"plot":{"id":"eec89a8f-7e4c-4308-9bd1-26424f19b3b8","subtype":"Figure","type":"Plot"},"ticker":{"id":"b730bdfc-168c-41f3-be16-c48a713315fd","type":"DatetimeTicker"}},"id":"f8fd9e9b-4ed3-47d0-a542-f06977fa1bfc","type":"DatetimeAxis"},{"attributes":{"line_alpha":0.1,"line_color":"#fc4f30","line_width":2,"x":{"field":"day"},"y":{"field":"max_temp_f"}},"id":"cdefa62d-05d9-4fc8-ac54-203bd06833cf","type":"Line"},{"attributes":{"num_minor_ticks":5,"tickers":[{"id":"f4580e9c-7078-4b17-887a-bbdc10773ad9","type":"AdaptiveTicker"},{"id":"46adff45-675f-44e7-bf26-48d835cc7f8d","type":"AdaptiveTicker"},{"id":"8d7ab8ab-4632-468c-9f19-999408281a7a","type":"AdaptiveTicker"},{"id":"95ff7ca7-536c-4d72-a630-95bdaf2b8153","type":"DaysTicker"},{"id":"02b4e467-6c6a-4896-9669-b84de38d5598","type":"DaysTicker"},{"id":"fad57f20-0f67-4a11-984e-8e021b8570d4","type":"DaysTicker"},{"id":"9b821075-a5ad-4fcd-b8a6-e629052e43f9","type":"DaysTicker"},{"id":"83bc3916-cb81-4d62-8d08-01c6f5bbb68f","type":"MonthsTicker"},{"id":"d0e3a64a-368b-4584-abbb-f7e3fba6a658","type":"MonthsTicker"},{"id":"36a1d043-bfc2-4698-865f-08a23dd9c975","type":"MonthsTicker"},{"id":"b5f25591-c709-4ee2-81a8-db1e11987aaa","type":"MonthsTicker"},{"id":"5b231f27-cc2a-4dee-93da-92dc10902368","type":"YearsTicker"}]},"id":"b730bdfc-168c-41f3-be16-c48a713315fd","type":"DatetimeTicker"},{"attributes":{"dimensions":"width"},"id":"a2588e4e-d6e3-403d-ba68-ced768206c4c","type":"PanTool"},{"attributes":{"axis_label":"Temperature [F]","axis_label_standoff":9,"axis_label_text_alpha":{"value":0.925},"axis_label_text_color":{"value":"#5b5b5b"},"axis_label_text_font":"arial","axis_label_text_font_size":{"value":"1.2em"},"axis_label_text_font_style":"normal","axis_line_alpha":{"value":0},"bounds":"auto","formatter":{"id":"f7ad090e-b15a-42db-912f-df885991d96d","type":"BasicTickFormatter"},"major_label_orientation":"horizontal","major_label_text_alpha":{"value":0.925},"major_label_text_color":{"value":"#5b5b5b"},"major_label_text_font_size":{"value":"1.05em"},"major_tick_line_alpha":{"value":0},"minor_tick_line_alpha":{"value":0},"plot":{"id":"eec89a8f-7e4c-4308-9bd1-26424f19b3b8","subtype":"Figure","type":"Plot"},"ticker":{"id":"59d2ebf8-1706-497d-8085-21ce0609dce0","type":"BasicTicker"}},"id":"71091827-be5a-4b04-a445-5f15b8827fd8","type":"LinearAxis"},{"attributes":{},"id":"59d2ebf8-1706-497d-8085-21ce0609dce0","type":"BasicTicker"},{"attributes":{"dimension":1,"plot":{"id":"eec89a8f-7e4c-4308-9bd1-26424f19b3b8","subtype":"Figure","type":"Plot"},"ticker":{"id":"59d2ebf8-1706-497d-8085-21ce0609dce0","type":"BasicTicker"}},"id":"6e47a3d9-adab-4d1d-93ba-cbbb35f97bad","type":"Grid"},{"attributes":{"callback":null,"end":1514678400000.0,"start":1451606400000.0},"id":"13930c65-987d-4bfa-accd-5cfe3cba2e3e","type":"Range1d"},{"attributes":{"line_color":"#fc4f30","line_width":2,"x":{"field":"day"},"y":{"field":"max_temp_f"}},"id":"d4f6ef37-f240-4f6b-9c89-1b9535853533","type":"Line"},{"attributes":{"line_alpha":0.1,"line_color":"#30a2da","line_width":2,"x":{"field":"day"},"y":{"field":"min_temp_f"}},"id":"e8457b40-5127-4dd5-a2ab-e972779d1b43","type":"Line"},{"attributes":{"line_alpha":0.2,"line_color":"#fc4f30","line_width":2,"x":{"field":"day"},"y":{"field":"max_temp_f"}},"id":"2b87a9f7-bccf-49f5-80e5-5a90f4a828af","type":"Line"},{"attributes":{"callback":null,"column_names":["day","min_temp_f","day_dt_strings"],"data":{"day":{"__ndarray__":"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","dtype":"float64","shape":[731]},"day_dt_strings":["2016-01-01 00:00:00","2016-01-02 00:00:00","2016-01-03 00:00:00","2016-01-04 00:00:00","2016-01-05 00:00:00","2016-01-06 00:00:00","2016-01-07 00:00:00","2016-01-08 00:00:00","2016-01-09 00:00:00","2016-01-10 00:00:00","2016-01-11 00:00:00","2016-01-12 00:00:00","2016-01-13 00:00:00","2016-01-14 00:00:00","2016-01-15 00:00:00","2016-01-16 00:00:00","2016-01-17 00:00:00","2016-01-18 00:00:00","2016-01-19 00:00:00","2016-01-20 00:00:00","2016-01-21 00:00:00","2016-01-22 00:00:00","2016-01-23 00:00:00","2016-01-24 00:00:00","2016-01-25 00:00:00","2016-01-26 00:00:00","2016-01-27 00:00:00","2016-01-28 00:00:00","2016-01-29 00:00:00","2016-01-30 00:00:00","2016-01-31 00:00:00","2016-02-01 00:00:00","2016-02-02 00:00:00","2016-02-03 00:00:00","2016-02-04 00:00:00","2016-02-05 00:00:00","2016-02-06 00:00:00","2016-02-07 00:00:00","2016-02-08 00:00:00","2016-02-09 00:00:00","2016-02-10 00:00:00","2016-02-11 00:00:00","2016-02-12 00:00:00","2016-02-13 00:00:00","2016-02-14 00:00:00","2016-02-15 00:00:00","2016-02-16 00:00:00","2016-02-17 00:00:00","2016-02-18 00:00:00","2016-02-19 00:00:00","2016-02-20 00:00:00","2016-02-21 00:00:00","2016-02-22 00:00:00","2016-02-23 00:00:00","2016-02-24 00:00:00","2016-02-25 00:00:00","2016-02-26 00:00:00","2016-02-27 00:00:00","2016-02-28 00:00:00","2016-02-29 00:00:00","2016-03-01 00:00:00","2016-03-02 00:00:00","2016-03-03 00:00:00","2016-03-04 00:00:00","2016-03-05 00:00:00","2016-03-06 00:00:00","2016-03-07 00:00:00","2016-03-08 00:00:00","2016-03-09 00:00:00","2016-03-10 00:00:00","2016-03-11 00:00:00","2016-03-12 00:00:00","2016-03-13 00:00:00","2016-03-14 00:00:00","2016-03-15 00:00:00","2016-03-16 00:00:00","2016-03-17 00:00:00","2016-03-18 00:00:00","2016-03-19 00:00:00","2016-03-20 00:00:00","2016-03-21 00:00:00","2016-03-22 00:00:00","2016-03-23 00:00:00","2016-03-24 00:00:00","2016-03-25 00:00:00","2016-03-26 00:00:00","2016-03-27 00:00:00","2016-03-28 00:00:00","2016-03-29 00:00:00","2016-03-30 00:00:00","2016-03-31 00:00:00","2016-04-01 00:00:00","2016-04-02 00:00:00","2016-04-03 00:00:00","2016-04-04 00:00:00","2016-04-05 00:00:00","2016-04-06 00:00:00","2016-04-07 00:00:00","2016-04-08 00:00:00","2016-04-09 00:00:00","2016-04-10 00:00:00","2016-04-11 00:00:00","2016-04-12 00:00:00","2016-04-13 00:00:00","2016-04-14 00:00:00","2016-04-15 00:00:00","2016-04-16 00:00:00","2016-04-17 00:00:00","2016-04-18 00:00:00","2016-04-19 00:00:00","2016-04-20 00:00:00","2016-04-21 00:00:00","2016-04-22 00:00:00","2016-04-23 00:00:00","2016-04-24 00:00:00","2016-04-25 00:00:00","2016-04-26 00:00:00","2016-04-27 00:00:00","2016-04-28 00:00:00","2016-04-29 00:00:00","2016-04-30 00:00:00","2016-05-01 00:00:00","2016-05-02 00:00:00","2016-05-03 00:00:00","2016-05-04 00:00:00","2016-05-05 00:00:00","2016-05-06 00:00:00","2016-05-07 00:00:00","2016-05-08 00:00:00","2016-05-09 00:00:00","2016-05-10 00:00:00","2016-05-11 00:00:00","2016-05-12 00:00:00","2016-05-13 00:00:00","2016-05-14 00:00:00","2016-05-15 00:00:00","2016-05-16 00:00:00","2016-05-17 00:00:00","2016-05-18 00:00:00","2016-05-19 00:00:00","2016-05-20 00:00:00","2016-05-21 00:00:00","2016-05-22 00:00:00","2016-05-23 00:00:00","2016-05-24 00:00:00","2016-05-25 00:00:00","2016-05-26 00:00:00","2016-05-27 00:00:00","2016-05-28 00:00:00","2016-05-29 00:00:00","2016-05-30 00:00:00","2016-05-31 00:00:00","2016-06-01 00:00:00","2016-06-02 00:00:00","2016-06-03 00:00:00","2016-06-04 00:00:00","2016-06-05 00:00:00","2016-06-06 00:00:00","2016-06-07 00:00:00","2016-06-08 00:00:00","2016-06-09 00:00:00","2016-06-10 00:00:00","2016-06-11 00:00:00","2016-06-12 00:00:00","2016-06-13 00:00:00","2016-06-14 00:00:00","2016-06-15 00:00:00","2016-06-16 00:00:00","2016-06-17 00:00:00","2016-06-18 00:00:00","2016-06-19 00:00:00","2016-06-20 00:00:00","2016-06-21 00:00:00","2016-06-22 00:00:00","2016-06-23 00:00:00","2016-06-24 00:00:00","2016-06-25 00:00:00","2016-06-26 00:00:00","2016-06-27 00:00:00","2016-06-28 00:00:00","2016-06-29 00:00:00","2016-06-30 00:00:00","2016-07-01 00:00:00","2016-07-02 00:00:00","2016-07-03 00:00:00","2016-07-04 00:00:00","2016-07-05 00:00:00","2016-07-06 00:00:00","2016-07-07 00:00:00","2016-07-08 00:00:00","2016-07-09 00:00:00","2016-07-10 00:00:00","2016-07-11 00:00:00","2016-07-12 00:00:00","2016-07-13 00:00:00","2016-07-14 00:00:00","2016-07-15 00:00:00","2016-07-16 00:00:00","2016-07-17 00:00:00","2016-07-18 00:00:00","2016-07-19 00:00:00","2016-07-20 00:00:00","2016-07-21 00:00:00","2016-07-22 00:00:00","2016-07-23 00:00:00","2016-07-24 00:00:00","2016-07-25 00:00:00","2016-07-26 00:00:00","2016-07-27 00:00:00","2016-07-28 00:00:00","2016-07-29 00:00:00","2016-07-30 00:00:00","2016-07-31 00:00:00","2016-08-01 00:00:00","2016-08-02 00:00:00","2016-08-03 00:00:00","2016-08-04 00:00:00","2016-08-05 00:00:00","2016-08-06 00:00:00","2016-08-07 00:00:00","2016-08-08 00:00:00","2016-08-09 00:00:00","2016-08-10 00:00:00","2016-08-11 00:00:00","2016-08-12 00:00:00","2016-08-13 00:00:00","2016-08-14 00:00:00","2016-08-15 00:00:00","2016-08-16 00:00:00","2016-08-17 00:00:00","2016-08-18 00:00:00","2016-08-19 00:00:00","2016-08-20 00:00:00","2016-08-21 00:00:00","2016-08-22 00:00:00","2016-08-23 00:00:00","2016-08-24 00:00:00","2016-08-25 00:00:00","2016-08-26 00:00:00","2016-08-27 00:00:00","2016-08-28 00:00:00","2016-08-29 00:00:00","2016-08-30 00:00:00","2016-08-31 00:00:00","2016-09-01 00:00:00","2016-09-02 00:00:00","2016-09-03 00:00:00","2016-09-04 00:00:00","2016-09-05 00:00:00","2016-09-06 00:00:00","2016-09-07 00:00:00","2016-09-08 00:00:00","2016-09-09 00:00:00","2016-09-10 00:00:00","2016-09-11 00:00:00","2016-09-12 00:00:00","2016-09-13 00:00:00","2016-09-14 00:00:00","2016-09-15 00:00:00","2016-09-16 00:00:00","2016-09-17 00:00:00","2016-09-18 00:00:00","2016-09-19 00:00:00","2016-09-20 00:00:00","2016-09-21 00:00:00","2016-09-22 00:00:00","2016-09-23 00:00:00","2016-09-24 00:00:00","2016-09-25 00:00:00","2016-09-26 00:00:00","2016-09-27 00:00:00","2016-09-28 00:00:00","2016-09-29 00:00:00","2016-09-30 00:00:00","2016-10-01 00:00:00","2016-10-02 00:00:00","2016-10-03 00:00:00","2016-10-04 00:00:00","2016-10-05 00:00:00","2016-10-06 00:00:00","2016-10-07 00:00:00","2016-10-08 00:00:00","2016-10-09 00:00:00","2016-10-10 00:00:00","2016-10-11 00:00:00","2016-10-12 00:00:00","2016-10-13 00:00:00","2016-10-14 00:00:00","2016-10-15 00:00:00","2016-10-16 00:00:00","2016-10-17 00:00:00","2016-10-18 00:00:00","2016-10-19 00:00:00","2016-10-20 00:00:00","2016-10-21 00:00:00","2016-10-22 00:00:00","2016-10-23 00:00:00","2016-10-24 00:00:00","2016-10-25 00:00:00","2016-10-26 00:00:00","2016-10-27 00:00:00","2016-10-28 00:00:00","2016-10-29 00:00:00","2016-10-30 00:00:00","2016-10-31 00:00:00","2016-11-01 00:00:00","2016-11-02 00:00:00","2016-11-03 00:00:00","2016-11-04 00:00:00","2016-11-05 00:00:00","2016-11-06 00:00:00","2016-11-07 00:00:00","2016-11-08 00:00:00","2016-11-09 00:00:00","2016-11-10 00:00:00","2016-11-11 00:00:00","2016-11-12 00:00:00","2016-11-13 00:00:00","2016-11-14 00:00:00","2016-11-15 00:00:00","2016-11-16 00:00:00","2016-11-17 00:00:00","2016-11-18 00:00:00","2016-11-19 00:00:00","2016-11-20 00:00:00","2016-11-21 00:00:00","2016-11-22 00:00:00","2016-11-23 00:00:00","2016-11-24 00:00:00","2016-11-25 00:00:00","2016-11-26 00:00:00","2016-11-27 00:00:00","2016-11-28 00:00:00","2016-11-29 00:00:00","2016-11-30 00:00:00","2016-12-01 00:00:00","2016-12-02 00:00:00","2016-12-03 00:00:00","2016-12-04 00:00:00","2016-12-05 00:00:00","2016-12-06 00:00:00","2016-12-07 00:00:00","2016-12-08 00:00:00","2016-12-09 00:00:00","2016-12-10 00:00:00","2016-12-11 00:00:00","2016-12-12 00:00:00","2016-12-13 00:00:00","2016-12-14 00:00:00","2016-12-15 00:00:00","2016-12-16 00:00:00","2016-12-17 00:00:00","2016-12-18 00:00:00","2016-12-19 00:00:00","2016-12-20 00:00:00","2016-12-21 00:00:00","2016-12-22 00:00:00","2016-12-23 00:00:00","2016-12-24 00:00:00","2016-12-25 00:00:00","2016-12-26 00:00:00","2016-12-27 00:00:00","2016-12-28 00:00:00","2016-12-29 00:00:00","2016-12-30 00:00:00","2016-12-31 00:00:00","2017-01-01 00:00:00","2017-01-02 00:00:00","2017-01-03 00:00:00","2017-01-04 00:00:00","2017-01-05 00:00:00","2017-01-06 00:00:00","2017-01-07 00:00:00","2017-01-08 00:00:00","2017-01-09 00:00:00","2017-01-10 00:00:00","2017-01-11 00:00:00","2017-01-12 00:00:00","2017-01-13 00:00:00","2017-01-14 00:00:00","2017-01-15 00:00:00","2017-01-16 00:00:00","2017-01-17 00:00:00","2017-01-18 00:00:00","2017-01-19 00:00:00","2017-01-20 00:00:00","2017-01-21 00:00:00","2017-01-22 00:00:00","2017-01-23 00:00:00","2017-01-24 00:00:00","2017-01-25 00:00:00","2017-01-26 00:00:00","2017-01-27 00:00:00","2017-01-28 00:00:00","2017-01-29 00:00:00","2017-01-30 00:00:00","2017-01-31 00:00:00","2017-02-01 00:00:00","2017-02-02 00:00:00","2017-02-03 00:00:00","2017-02-04 00:00:00","2017-02-05 00:00:00","2017-02-06 00:00:00","2017-02-07 00:00:00","2017-02-08 00:00:00","2017-02-09 00:00:00","2017-02-10 00:00:00","2017-02-11 00:00:00","2017-02-12 00:00:00","2017-02-13 00:00:00","2017-02-14 00:00:00","2017-02-15 00:00:00","2017-02-16 00:00:00","2017-02-17 00:00:00","2017-02-18 00:00:00","2017-02-19 00:00:00","2017-02-20 00:00:00","2017-02-21 00:00:00","2017-02-22 00:00:00","2017-02-23 00:00:00","2017-02-24 00:00:00","2017-02-25 00:00:00","2017-02-26 00:00:00","2017-02-27 00:00:00","2017-02-28 00:00:00","2017-03-01 00:00:00","2017-03-02 00:00:00","2017-03-03 00:00:00","2017-03-04 00:00:00","2017-03-05 00:00:00","2017-03-06 00:00:00","2017-03-07 00:00:00","2017-03-08 00:00:00","2017-03-09 00:00:00","2017-03-10 00:00:00","2017-03-11 00:00:00","2017-03-12 00:00:00","2017-03-13 00:00:00","2017-03-14 00:00:00","2017-03-15 00:00:00","2017-03-16 00:00:00","2017-03-17 00:00:00","2017-03-18 00:00:00","2017-03-19 00:00:00","2017-03-20 00:00:00","2017-03-21 00:00:00","2017-03-22 00:00:00","2017-03-23 00:00:00","2017-03-24 00:00:00","2017-03-25 00:00:00","2017-03-26 00:00:00","2017-03-27 00:00:00","2017-03-28 00:00:00","2017-03-29 00:00:00","2017-03-30 00:00:00","2017-03-31 00:00:00","2017-04-01 00:00:00","2017-04-02 00:00:00","2017-04-03 00:00:00","2017-04-04 00:00:00","2017-04-05 00:00:00","2017-04-06 00:00:00","2017-04-07 00:00:00","2017-04-08 00:00:00","2017-04-09 00:00:00","2017-04-10 00:00:00","2017-04-11 00:00:00","2017-04-12 00:00:00","2017-04-13 00:00:00","2017-04-14 00:00:00","2017-04-15 00:00:00","2017-04-16 00:00:00","2017-04-17 00:00:00","2017-04-18 00:00:00","2017-04-19 00:00:00","2017-04-20 00:00:00","2017-04-21 00:00:00","2017-04-22 00:00:00","2017-04-23 00:00:00","2017-04-24 00:00:00","2017-04-25 00:00:00","2017-04-26 00:00:00","2017-04-27 00:00:00","2017-04-28 00:00:00","2017-04-29 00:00:00","2017-04-30 00:00:00","2017-05-01 00:00:00","2017-05-02 00:00:00","2017-05-03 00:00:00","2017-05-04 00:00:00","2017-05-05 00:00:00","2017-05-06 00:00:00","2017-05-07 00:00:00","2017-05-08 00:00:00","2017-05-09 00:00:00","2017-05-10 00:00:00","2017-05-11 00:00:00","2017-05-12 00:00:00","2017-05-13 00:00:00","2017-05-14 00:00:00","2017-05-15 00:00:00","2017-05-16 00:00:00","2017-05-17 00:00:00","2017-05-18 00:00:00","2017-05-19 00:00:00","2017-05-20 00:00:00","2017-05-21 00:00:00","2017-05-22 00:00:00","2017-05-23 00:00:00","2017-05-24 00:00:00","2017-05-25 00:00:00","2017-05-26 00:00:00","2017-05-27 00:00:00","2017-05-28 00:00:00","2017-05-29 00:00:00","2017-05-30 00:00:00","2017-05-31 00:00:00","2017-06-01 00:00:00","2017-06-02 00:00:00","2017-06-03 00:00:00","2017-06-04 00:00:00","2017-06-05 00:00:00","2017-06-06 00:00:00","2017-06-07 00:00:00","2017-06-08 00:00:00","2017-06-09 00:00:00","2017-06-10 00:00:00","2017-06-11 00:00:00","2017-06-12 00:00:00","2017-06-13 00:00:00","2017-06-14 00:00:00","2017-06-15 00:00:00","2017-06-16 00:00:00","2017-06-17 00:00:00","2017-06-18 00:00:00","2017-06-19 00:00:00","2017-06-20 00:00:00","2017-06-21 00:00:00","2017-06-22 00:00:00","2017-06-23 00:00:00","2017-06-24 00:00:00","2017-06-25 00:00:00","2017-06-26 00:00:00","2017-06-27 00:00:00","2017-06-28 00:00:00","2017-06-29 00:00:00","2017-06-30 00:00:00","2017-07-01 00:00:00","2017-07-02 00:00:00","2017-07-03 00:00:00","2017-07-04 00:00:00","2017-07-05 00:00:00","2017-07-06 00:00:00","2017-07-07 00:00:00","2017-07-08 00:00:00","2017-07-09 00:00:00","2017-07-10 00:00:00","2017-07-11 00:00:00","2017-07-12 00:00:00","2017-07-13 00:00:00","2017-07-14 00:00:00","2017-07-15 00:00:00","2017-07-16 00:00:00","2017-07-17 00:00:00","2017-07-18 00:00:00","2017-07-19 00:00:00","2017-07-20 00:00:00","2017-07-21 00:00:00","2017-07-22 00:00:00","2017-07-23 00:00:00","2017-07-24 00:00:00","2017-07-25 00:00:00","2017-07-26 00:00:00","2017-07-27 00:00:00","2017-07-28 00:00:00","2017-07-29 00:00:00","2017-07-30 00:00:00","2017-07-31 00:00:00","2017-08-01 00:00:00","2017-08-02 00:00:00","2017-08-03 00:00:00","2017-08-04 00:00:00","2017-08-05 00:00:00","2017-08-06 00:00:00","2017-08-07 00:00:00","2017-08-08 00:00:00","2017-08-09 00:00:00","2017-08-10 00:00:00","2017-08-11 00:00:00","2017-08-12 00:00:00","2017-08-13 00:00:00","2017-08-14 00:00:00","2017-08-15 00:00:00","2017-08-16 00:00:00","2017-08-17 00:00:00","2017-08-18 00:00:00","2017-08-19 00:00:00","2017-08-20 00:00:00","2017-08-21 00:00:00","2017-08-22 00:00:00","2017-08-23 00:00:00","2017-08-24 00:00:00","2017-08-25 00:00:00","2017-08-26 00:00:00","2017-08-27 00:00:00","2017-08-28 00:00:00","2017-08-29 00:00:00","2017-08-30 00:00:00","2017-08-31 00:00:00","2017-09-01 00:00:00","2017-09-02 00:00:00","2017-09-03 00:00:00","2017-09-04 00:00:00","2017-09-05 00:00:00","2017-09-06 00:00:00","2017-09-07 00:00:00","2017-09-08 00:00:00","2017-09-09 00:00:00","2017-09-10 00:00:00","2017-09-11 00:00:00","2017-09-12 00:00:00","2017-09-13 00:00:00","2017-09-14 00:00:00","2017-09-15 00:00:00","2017-09-16 00:00:00","2017-09-17 00:00:00","2017-09-18 00:00:00","2017-09-19 00:00:00","2017-09-20 00:00:00","2017-09-21 00:00:00","2017-09-22 00:00:00","2017-09-23 00:00:00","2017-09-24 00:00:00","2017-09-25 00:00:00","2017-09-26 00:00:00","2017-09-27 00:00:00","2017-09-28 00:00:00","2017-09-29 00:00:00","2017-09-30 00:00:00","2017-10-01 00:00:00","2017-10-02 00:00:00","2017-10-03 00:00:00","2017-10-04 00:00:00","2017-10-05 00:00:00","2017-10-06 00:00:00","2017-10-07 00:00:00","2017-10-08 00:00:00","2017-10-09 00:00:00","2017-10-10 00:00:00","2017-10-11 00:00:00","2017-10-12 00:00:00","2017-10-13 00:00:00","2017-10-14 00:00:00","2017-10-15 00:00:00","2017-10-16 00:00:00","2017-10-17 00:00:00","2017-10-18 00:00:00","2017-10-19 00:00:00","2017-10-20 00:00:00","2017-10-21 00:00:00","2017-10-22 00:00:00","2017-10-23 00:00:00","2017-10-24 00:00:00","2017-10-25 00:00:00","2017-10-26 00:00:00","2017-10-27 00:00:00","2017-10-28 00:00:00","2017-10-29 00:00:00","2017-10-30 00:00:00","2017-10-31 00:00:00","2017-11-01 00:00:00","2017-11-02 00:00:00","2017-11-03 00:00:00","2017-11-04 00:00:00","2017-11-05 00:00:00","2017-11-06 00:00:00","2017-11-07 00:00:00","2017-11-08 00:00:00","2017-11-09 00:00:00","2017-11-10 00:00:00","2017-11-11 00:00:00","2017-11-12 00:00:00","2017-11-13 00:00:00","2017-11-14 00:00:00","2017-11-15 00:00:00","2017-11-16 00:00:00","2017-11-17 00:00:00","2017-11-18 00:00:00","2017-11-19 00:00:00","2017-11-20 00:00:00","2017-11-21 00:00:00","2017-11-22 00:00:00","2017-11-23 00:00:00","2017-11-24 00:00:00","2017-11-25 00:00:00","2017-11-26 00:00:00","2017-11-27 00:00:00","2017-11-28 00:00:00","2017-11-29 00:00:00","2017-11-30 00:00:00","2017-12-01 00:00:00","2017-12-02 00:00:00","2017-12-03 00:00:00","2017-12-04 00:00:00","2017-12-05 00:00:00","2017-12-06 00:00:00","2017-12-07 00:00:00","2017-12-08 00:00:00","2017-12-09 00:00:00","2017-12-10 00:00:00","2017-12-11 00:00:00","2017-12-12 00:00:00","2017-12-13 00:00:00","2017-12-14 00:00:00","2017-12-15 00:00:00","2017-12-16 00:00:00","2017-12-17 00:00:00","2017-12-18 00:00:00","2017-12-19 00:00:00","2017-12-20 00:00:00","2017-12-21 00:00:00","2017-12-22 00:00:00","2017-12-23 00:00:00","2017-12-24 00:00:00","2017-12-25 00:00:00","2017-12-26 00:00:00","2017-12-27 00:00:00","2017-12-28 00:00:00","2017-12-29 00:00:00","2017-12-30 00:00:00","2017-12-31 00:00:00"],"min_temp_f":{"__ndarray__":"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","dtype":"float64","shape":[731]}}},"id":"3638a731-91a6-49d3-ac1d-6944b160f71e","type":"ColumnDataSource"},{"attributes":{"data_source":{"id":"c8e4c3ec-32d6-4eca-8f65-35c57cc7c280","type":"ColumnDataSource"},"glyph":{"id":"d4f6ef37-f240-4f6b-9c89-1b9535853533","type":"Line"},"hover_glyph":null,"muted_glyph":{"id":"2b87a9f7-bccf-49f5-80e5-5a90f4a828af","type":"Line"},"nonselection_glyph":{"id":"cdefa62d-05d9-4fc8-ac54-203bd06833cf","type":"Line"},"selection_glyph":null,"view":{"id":"d93ad6fb-d6bb-4bad-9293-db3eccb813a7","type":"CDSView"}},"id":"92c942fe-b929-44d5-b2a2-8d6b99d44350","type":"GlyphRenderer"},{"attributes":{"source":{"id":"c8e4c3ec-32d6-4eca-8f65-35c57cc7c280","type":"ColumnDataSource"}},"id":"d93ad6fb-d6bb-4bad-9293-db3eccb813a7","type":"CDSView"},{"attributes":{"label":{"value":"Min Temp"},"renderers":[{"id":"92c942fe-b929-44d5-b2a2-8d6b99d44350","type":"GlyphRenderer"}]},"id":"cd76a278-9797-43bf-a219-3ec97da201eb","type":"LegendItem"},{"attributes":{},"id":"22dd9ffc-180d-4336-8e4a-d1d91d1eda93","type":"SaveTool"},{"attributes":{"callback":null,"end":93.85714285714286,"start":-0.14285714285714285},"id":"844598c9-e359-4f2a-a121-1e0e3fbadca7","type":"Range1d"},{"attributes":{},"id":"4b4e4182-f5c2-40ca-b92e-9929c990fa92","type":"ResetTool"},{"attributes":{"bottom_units":"screen","fill_alpha":{"value":0.5},"fill_color":{"value":"lightgrey"},"left_units":"screen","level":"overlay","line_alpha":{"value":1.0},"line_color":{"value":"black"},"line_dash":[4,4],"line_width":{"value":2},"plot":null,"render_mode":"css","right_units":"screen","top_units":"screen"},"id":"49a77f51-e328-430e-8fd3-1c9873789264","type":"BoxAnnotation"},{"attributes":{"line_color":"#30a2da","line_width":2,"x":{"field":"day"},"y":{"field":"min_temp_f"}},"id":"15a1b356-e018-458a-ad9a-a81ad4cc23dc","type":"Line"},{"attributes":{"line_alpha":0.2,"line_color":"#30a2da","line_width":2,"x":{"field":"day"},"y":{"field":"min_temp_f"}},"id":"6963e7af-456e-45f3-84a3-25cd21469a7a","type":"Line"},{"attributes":{"data_source":{"id":"3638a731-91a6-49d3-ac1d-6944b160f71e","type":"ColumnDataSource"},"glyph":{"id":"15a1b356-e018-458a-ad9a-a81ad4cc23dc","type":"Line"},"hover_glyph":null,"muted_glyph":{"id":"6963e7af-456e-45f3-84a3-25cd21469a7a","type":"Line"},"nonselection_glyph":{"id":"e8457b40-5127-4dd5-a2ab-e972779d1b43","type":"Line"},"selection_glyph":null,"view":{"id":"ec34ceb5-f470-46e2-8ee4-867c09faf36c","type":"CDSView"}},"id":"908bee09-13c6-4904-af7d-187cd83578e9","type":"GlyphRenderer"},{"attributes":{"days":[1,4,7,10,13,16,19,22,25,28]},"id":"02b4e467-6c6a-4896-9669-b84de38d5598","type":"DaysTicker"},{"attributes":{"source":{"id":"3638a731-91a6-49d3-ac1d-6944b160f71e","type":"ColumnDataSource"}},"id":"ec34ceb5-f470-46e2-8ee4-867c09faf36c","type":"CDSView"},{"attributes":{"days":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]},"id":"95ff7ca7-536c-4d72-a630-95bdaf2b8153","type":"DaysTicker"},{"attributes":{"mantissas":[1,2,5],"max_interval":500.0,"num_minor_ticks":0},"id":"f4580e9c-7078-4b17-887a-bbdc10773ad9","type":"AdaptiveTicker"},{"attributes":{"label":{"value":"Max Temp"},"renderers":[{"id":"908bee09-13c6-4904-af7d-187cd83578e9","type":"GlyphRenderer"}]},"id":"0a95c2a9-5421-4330-8ada-76a1a7748f39","type":"LegendItem"},{"attributes":{"callback":null,"renderers":[{"id":"908bee09-13c6-4904-af7d-187cd83578e9","type":"GlyphRenderer"}],"toggleable":false,"tooltips":[["day","@{day_dt_strings}"],["min_temp_f","@{min_temp_f}"]]},"id":"280d8f9d-22ae-4e06-af2e-bf117a5f3260","type":"HoverTool"},{"attributes":{"base":24,"mantissas":[1,2,4,6,8,12],"max_interval":43200000.0,"min_interval":3600000.0,"num_minor_ticks":0},"id":"8d7ab8ab-4632-468c-9f19-999408281a7a","type":"AdaptiveTicker"},{"attributes":{"days":[1,8,15,22]},"id":"fad57f20-0f67-4a11-984e-8e021b8570d4","type":"DaysTicker"},{"attributes":{"callback":null,"renderers":[{"id":"92c942fe-b929-44d5-b2a2-8d6b99d44350","type":"GlyphRenderer"}],"toggleable":false,"tooltips":[["day","@{day_dt_strings}"],["max_temp_f","@{max_temp_f}"]]},"id":"86b71d97-9a59-4cb0-b49c-6c07df4b30d9","type":"HoverTool"},{"attributes":{"days":[1,15]},"id":"9b821075-a5ad-4fcd-b8a6-e629052e43f9","type":"DaysTicker"},{"attributes":{"below":[{"id":"f8fd9e9b-4ed3-47d0-a542-f06977fa1bfc","type":"DatetimeAxis"}],"left":[{"id":"71091827-be5a-4b04-a445-5f15b8827fd8","type":"LinearAxis"}],"min_border_bottom":10,"min_border_left":10,"min_border_right":10,"min_border_top":10,"plot_width":725,"renderers":[{"id":"f8fd9e9b-4ed3-47d0-a542-f06977fa1bfc","type":"DatetimeAxis"},{"id":"40335f60-a9ea-4e40-a4b1-8617ca0a14e8","type":"Grid"},{"id":"71091827-be5a-4b04-a445-5f15b8827fd8","type":"LinearAxis"},{"id":"6e47a3d9-adab-4d1d-93ba-cbbb35f97bad","type":"Grid"},{"id":"49a77f51-e328-430e-8fd3-1c9873789264","type":"BoxAnnotation"},{"id":"abc09016-9a92-4b61-b668-4581a40619c1","type":"Legend"},{"id":"908bee09-13c6-4904-af7d-187cd83578e9","type":"GlyphRenderer"},{"id":"92c942fe-b929-44d5-b2a2-8d6b99d44350","type":"GlyphRenderer"}],"title":{"id":"695f6626-0dd8-490b-ab81-f422abd5bf57","type":"Title"},"toolbar":{"id":"dfca5d3f-538b-4cf2-bf25-03863d836c55","type":"Toolbar"},"toolbar_location":"above","x_range":{"id":"13930c65-987d-4bfa-accd-5cfe3cba2e3e","type":"Range1d"},"x_scale":{"id":"f4bf7e3b-2007-4e94-a214-db16e5888b96","type":"LinearScale"},"y_range":{"id":"844598c9-e359-4f2a-a121-1e0e3fbadca7","type":"Range1d"},"y_scale":{"id":"4664b7b8-0d66-4dea-bda7-0acd36b95e51","type":"LinearScale"}},"id":"eec89a8f-7e4c-4308-9bd1-26424f19b3b8","subtype":"Figure","type":"Plot"},{"attributes":{"months":[0,1,2,3,4,5,6,7,8,9,10,11]},"id":"83bc3916-cb81-4d62-8d08-01c6f5bbb68f","type":"MonthsTicker"},{"attributes":{},"id":"f7ad090e-b15a-42db-912f-df885991d96d","type":"BasicTickFormatter"},{"attributes":{"months":[0,2,4,6,8,10]},"id":"d0e3a64a-368b-4584-abbb-f7e3fba6a658","type":"MonthsTicker"},{"attributes":{"plot":null,"text":"KCMI","text_alpha":{"value":0.925},"text_color":{"value":"#5b5b5b"},"text_font":"arial","text_font_size":{"value":"1.65em"},"text_font_style":"normal"},"id":"695f6626-0dd8-490b-ab81-f422abd5bf57","type":"Title"},{"attributes":{"months":[0,4,8]},"id":"36a1d043-bfc2-4698-865f-08a23dd9c975","type":"MonthsTicker"},{"attributes":{},"id":"dc3005ef-8b13-4e57-bcd1-1867c3c8e6a6","type":"DatetimeTickFormatter"},{"attributes":{"months":[0,6]},"id":"b5f25591-c709-4ee2-81a8-db1e11987aaa","type":"MonthsTicker"},{"attributes":{},"id":"4664b7b8-0d66-4dea-bda7-0acd36b95e51","type":"LinearScale"},{"attributes":{},"id":"5b231f27-cc2a-4dee-93da-92dc10902368","type":"YearsTicker"},{"attributes":{},"id":"f4bf7e3b-2007-4e94-a214-db16e5888b96","type":"LinearScale"},{"attributes":{"background_fill_alpha":{"value":0.5},"border_line_alpha":{"value":0},"click_policy":"mute","glyph_width":15,"items":[{"id":"0a95c2a9-5421-4330-8ada-76a1a7748f39","type":"LegendItem"},{"id":"cd76a278-9797-43bf-a219-3ec97da201eb","type":"LegendItem"}],"label_standoff":6,"label_text_alpha":{"value":0.925},"label_text_color":{"value":"#5b5b5b"},"label_text_font_size":{"value":"1.05em"},"orientation":"horizontal","plot":{"id":"eec89a8f-7e4c-4308-9bd1-26424f19b3b8","subtype":"Figure","type":"Plot"},"spacing":12},"id":"abc09016-9a92-4b61-b668-4581a40619c1","type":"Legend"},{"attributes":{"active_drag":"auto","active_inspect":"auto","active_scroll":"auto","active_tap":"auto","tools":[{"id":"280d8f9d-22ae-4e06-af2e-bf117a5f3260","type":"HoverTool"},{"id":"86b71d97-9a59-4cb0-b49c-6c07df4b30d9","type":"HoverTool"},{"id":"22dd9ffc-180d-4336-8e4a-d1d91d1eda93","type":"SaveTool"},{"id":"4b4e4182-f5c2-40ca-b92e-9929c990fa92","type":"ResetTool"},{"id":"a2588e4e-d6e3-403d-ba68-ced768206c4c","type":"PanTool"},{"id":"6fdf3f1f-4f37-449c-aabc-3498b0eb868e","type":"WheelZoomTool"}]},"id":"dfca5d3f-538b-4cf2-bf25-03863d836c55","type":"Toolbar"},{"attributes":{"callback":null,"column_names":["day","max_temp_f","day_dt_strings"],"data":{"day":{"__ndarray__":"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","dtype":"float64","shape":[731]},"day_dt_strings":["2016-01-01 00:00:00","2016-01-02 00:00:00","2016-01-03 00:00:00","2016-01-04 00:00:00","2016-01-05 00:00:00","2016-01-06 00:00:00","2016-01-07 00:00:00","2016-01-08 00:00:00","2016-01-09 00:00:00","2016-01-10 00:00:00","2016-01-11 00:00:00","2016-01-12 00:00:00","2016-01-13 00:00:00","2016-01-14 00:00:00","2016-01-15 00:00:00","2016-01-16 00:00:00","2016-01-17 00:00:00","2016-01-18 00:00:00","2016-01-19 00:00:00","2016-01-20 00:00:00","2016-01-21 00:00:00","2016-01-22 00:00:00","2016-01-23 00:00:00","2016-01-24 00:00:00","2016-01-25 00:00:00","2016-01-26 00:00:00","2016-01-27 00:00:00","2016-01-28 00:00:00","2016-01-29 00:00:00","2016-01-30 00:00:00","2016-01-31 00:00:00","2016-02-01 00:00:00","2016-02-02 00:00:00","2016-02-03 00:00:00","2016-02-04 00:00:00","2016-02-05 00:00:00","2016-02-06 00:00:00","2016-02-07 00:00:00","2016-02-08 00:00:00","2016-02-09 00:00:00","2016-02-10 00:00:00","2016-02-11 00:00:00","2016-02-12 00:00:00","2016-02-13 00:00:00","2016-02-14 00:00:00","2016-02-15 00:00:00","2016-02-16 00:00:00","2016-02-17 00:00:00","2016-02-18 00:00:00","2016-02-19 00:00:00","2016-02-20 00:00:00","2016-02-21 00:00:00","2016-02-22 00:00:00","2016-02-23 00:00:00","2016-02-24 00:00:00","2016-02-25 00:00:00","2016-02-26 00:00:00","2016-02-27 00:00:00","2016-02-28 00:00:00","2016-02-29 00:00:00","2016-03-01 00:00:00","2016-03-02 00:00:00","2016-03-03 00:00:00","2016-03-04 00:00:00","2016-03-05 00:00:00","2016-03-06 00:00:00","2016-03-07 00:00:00","2016-03-08 00:00:00","2016-03-09 00:00:00","2016-03-10 00:00:00","2016-03-11 00:00:00","2016-03-12 00:00:00","2016-03-13 00:00:00","2016-03-14 00:00:00","2016-03-15 00:00:00","2016-03-16 00:00:00","2016-03-17 00:00:00","2016-03-18 00:00:00","2016-03-19 00:00:00","2016-03-20 00:00:00","2016-03-21 00:00:00","2016-03-22 00:00:00","2016-03-23 00:00:00","2016-03-24 00:00:00","2016-03-25 00:00:00","2016-03-26 00:00:00","2016-03-27 00:00:00","2016-03-28 00:00:00","2016-03-29 00:00:00","2016-03-30 00:00:00","2016-03-31 00:00:00","2016-04-01 00:00:00","2016-04-02 00:00:00","2016-04-03 00:00:00","2016-04-04 00:00:00","2016-04-05 00:00:00","2016-04-06 00:00:00","2016-04-07 00:00:00","2016-04-08 00:00:00","2016-04-09 00:00:00","2016-04-10 00:00:00","2016-04-11 00:00:00","2016-04-12 00:00:00","2016-04-13 00:00:00","2016-04-14 00:00:00","2016-04-15 00:00:00","2016-04-16 00:00:00","2016-04-17 00:00:00","2016-04-18 00:00:00","2016-04-19 00:00:00","2016-04-20 00:00:00","2016-04-21 00:00:00","2016-04-22 00:00:00","2016-04-23 00:00:00","2016-04-24 00:00:00","2016-04-25 00:00:00","2016-04-26 00:00:00","2016-04-27 00:00:00","2016-04-28 00:00:00","2016-04-29 00:00:00","2016-04-30 00:00:00","2016-05-01 00:00:00","2016-05-02 00:00:00","2016-05-03 00:00:00","2016-05-04 00:00:00","2016-05-05 00:00:00","2016-05-06 00:00:00","2016-05-07 00:00:00","2016-05-08 00:00:00","2016-05-09 00:00:00","2016-05-10 00:00:00","2016-05-11 00:00:00","2016-05-12 00:00:00","2016-05-13 00:00:00","2016-05-14 00:00:00","2016-05-15 00:00:00","2016-05-16 00:00:00","2016-05-17 00:00:00","2016-05-18 00:00:00","2016-05-19 00:00:00","2016-05-20 00:00:00","2016-05-21 00:00:00","2016-05-22 00:00:00","2016-05-23 00:00:00","2016-05-24 00:00:00","2016-05-25 00:00:00","2016-05-26 00:00:00","2016-05-27 00:00:00","2016-05-28 00:00:00","2016-05-29 00:00:00","2016-05-30 00:00:00","2016-05-31 00:00:00","2016-06-01 00:00:00","2016-06-02 00:00:00","2016-06-03 00:00:00","2016-06-04 00:00:00","2016-06-05 00:00:00","2016-06-06 00:00:00","2016-06-07 00:00:00","2016-06-08 00:00:00","2016-06-09 00:00:00","2016-06-10 00:00:00","2016-06-11 00:00:00","2016-06-12 00:00:00","2016-06-13 00:00:00","2016-06-14 00:00:00","2016-06-15 00:00:00","2016-06-16 00:00:00","2016-06-17 00:00:00","2016-06-18 00:00:00","2016-06-19 00:00:00","2016-06-20 00:00:00","2016-06-21 00:00:00","2016-06-22 00:00:00","2016-06-23 00:00:00","2016-06-24 00:00:00","2016-06-25 00:00:00","2016-06-26 00:00:00","2016-06-27 00:00:00","2016-06-28 00:00:00","2016-06-29 00:00:00","2016-06-30 00:00:00","2016-07-01 00:00:00","2016-07-02 00:00:00","2016-07-03 00:00:00","2016-07-04 00:00:00","2016-07-05 00:00:00","2016-07-06 00:00:00","2016-07-07 00:00:00","2016-07-08 00:00:00","2016-07-09 00:00:00","2016-07-10 00:00:00","2016-07-11 00:00:00","2016-07-12 00:00:00","2016-07-13 00:00:00","2016-07-14 00:00:00","2016-07-15 00:00:00","2016-07-16 00:00:00","2016-07-17 00:00:00","2016-07-18 00:00:00","2016-07-19 00:00:00","2016-07-20 00:00:00","2016-07-21 00:00:00","2016-07-22 00:00:00","2016-07-23 00:00:00","2016-07-24 00:00:00","2016-07-25 00:00:00","2016-07-26 00:00:00","2016-07-27 00:00:00","2016-07-28 00:00:00","2016-07-29 00:00:00","2016-07-30 00:00:00","2016-07-31 00:00:00","2016-08-01 00:00:00","2016-08-02 00:00:00","2016-08-03 00:00:00","2016-08-04 00:00:00","2016-08-05 00:00:00","2016-08-06 00:00:00","2016-08-07 00:00:00","2016-08-08 00:00:00","2016-08-09 00:00:00","2016-08-10 00:00:00","2016-08-11 00:00:00","2016-08-12 00:00:00","2016-08-13 00:00:00","2016-08-14 00:00:00","2016-08-15 00:00:00","2016-08-16 00:00:00","2016-08-17 00:00:00","2016-08-18 00:00:00","2016-08-19 00:00:00","2016-08-20 00:00:00","2016-08-21 00:00:00","2016-08-22 00:00:00","2016-08-23 00:00:00","2016-08-24 00:00:00","2016-08-25 00:00:00","2016-08-26 00:00:00","2016-08-27 00:00:00","2016-08-28 00:00:00","2016-08-29 00:00:00","2016-08-30 00:00:00","2016-08-31 00:00:00","2016-09-01 00:00:00","2016-09-02 00:00:00","2016-09-03 00:00:00","2016-09-04 00:00:00","2016-09-05 00:00:00","2016-09-06 00:00:00","2016-09-07 00:00:00","2016-09-08 00:00:00","2016-09-09 00:00:00","2016-09-10 00:00:00","2016-09-11 00:00:00","2016-09-12 00:00:00","2016-09-13 00:00:00","2016-09-14 00:00:00","2016-09-15 00:00:00","2016-09-16 00:00:00","2016-09-17 00:00:00","2016-09-18 00:00:00","2016-09-19 00:00:00","2016-09-20 00:00:00","2016-09-21 00:00:00","2016-09-22 00:00:00","2016-09-23 00:00:00","2016-09-24 00:00:00","2016-09-25 00:00:00","2016-09-26 00:00:00","2016-09-27 00:00:00","2016-09-28 00:00:00","2016-09-29 00:00:00","2016-09-30 00:00:00","2016-10-01 00:00:00","2016-10-02 00:00:00","2016-10-03 00:00:00","2016-10-04 00:00:00","2016-10-05 00:00:00","2016-10-06 00:00:00","2016-10-07 00:00:00","2016-10-08 00:00:00","2016-10-09 00:00:00","2016-10-10 00:00:00","2016-10-11 00:00:00","2016-10-12 00:00:00","2016-10-13 00:00:00","2016-10-14 00:00:00","2016-10-15 00:00:00","2016-10-16 00:00:00","2016-10-17 00:00:00","2016-10-18 00:00:00","2016-10-19 00:00:00","2016-10-20 00:00:00","2016-10-21 00:00:00","2016-10-22 00:00:00","2016-10-23 00:00:00","2016-10-24 00:00:00","2016-10-25 00:00:00","2016-10-26 00:00:00","2016-10-27 00:00:00","2016-10-28 00:00:00","2016-10-29 00:00:00","2016-10-30 00:00:00","2016-10-31 00:00:00","2016-11-01 00:00:00","2016-11-02 00:00:00","2016-11-03 00:00:00","2016-11-04 00:00:00","2016-11-05 00:00:00","2016-11-06 00:00:00","2016-11-07 00:00:00","2016-11-08 00:00:00","2016-11-09 00:00:00","2016-11-10 00:00:00","2016-11-11 00:00:00","2016-11-12 00:00:00","2016-11-13 00:00:00","2016-11-14 00:00:00","2016-11-15 00:00:00","2016-11-16 00:00:00","2016-11-17 00:00:00","2016-11-18 00:00:00","2016-11-19 00:00:00","2016-11-20 00:00:00","2016-11-21 00:00:00","2016-11-22 00:00:00","2016-11-23 00:00:00","2016-11-24 00:00:00","2016-11-25 00:00:00","2016-11-26 00:00:00","2016-11-27 00:00:00","2016-11-28 00:00:00","2016-11-29 00:00:00","2016-11-30 00:00:00","2016-12-01 00:00:00","2016-12-02 00:00:00","2016-12-03 00:00:00","2016-12-04 00:00:00","2016-12-05 00:00:00","2016-12-06 00:00:00","2016-12-07 00:00:00","2016-12-08 00:00:00","2016-12-09 00:00:00","2016-12-10 00:00:00","2016-12-11 00:00:00","2016-12-12 00:00:00","2016-12-13 00:00:00","2016-12-14 00:00:00","2016-12-15 00:00:00","2016-12-16 00:00:00","2016-12-17 00:00:00","2016-12-18 00:00:00","2016-12-19 00:00:00","2016-12-20 00:00:00","2016-12-21 00:00:00","2016-12-22 00:00:00","2016-12-23 00:00:00","2016-12-24 00:00:00","2016-12-25 00:00:00","2016-12-26 00:00:00","2016-12-27 00:00:00","2016-12-28 00:00:00","2016-12-29 00:00:00","2016-12-30 00:00:00","2016-12-31 00:00:00","2017-01-01 00:00:00","2017-01-02 00:00:00","2017-01-03 00:00:00","2017-01-04 00:00:00","2017-01-05 00:00:00","2017-01-06 00:00:00","2017-01-07 00:00:00","2017-01-08 00:00:00","2017-01-09 00:00:00","2017-01-10 00:00:00","2017-01-11 00:00:00","2017-01-12 00:00:00","2017-01-13 00:00:00","2017-01-14 00:00:00","2017-01-15 00:00:00","2017-01-16 00:00:00","2017-01-17 00:00:00","2017-01-18 00:00:00","2017-01-19 00:00:00","2017-01-20 00:00:00","2017-01-21 00:00:00","2017-01-22 00:00:00","2017-01-23 00:00:00","2017-01-24 00:00:00","2017-01-25 00:00:00","2017-01-26 00:00:00","2017-01-27 00:00:00","2017-01-28 00:00:00","2017-01-29 00:00:00","2017-01-30 00:00:00","2017-01-31 00:00:00","2017-02-01 00:00:00","2017-02-02 00:00:00","2017-02-03 00:00:00","2017-02-04 00:00:00","2017-02-05 00:00:00","2017-02-06 00:00:00","2017-02-07 00:00:00","2017-02-08 00:00:00","2017-02-09 00:00:00","2017-02-10 00:00:00","2017-02-11 00:00:00","2017-02-12 00:00:00","2017-02-13 00:00:00","2017-02-14 00:00:00","2017-02-15 00:00:00","2017-02-16 00:00:00","2017-02-17 00:00:00","2017-02-18 00:00:00","2017-02-19 00:00:00","2017-02-20 00:00:00","2017-02-21 00:00:00","2017-02-22 00:00:00","2017-02-23 00:00:00","2017-02-24 00:00:00","2017-02-25 00:00:00","2017-02-26 00:00:00","2017-02-27 00:00:00","2017-02-28 00:00:00","2017-03-01 00:00:00","2017-03-02 00:00:00","2017-03-03 00:00:00","2017-03-04 00:00:00","2017-03-05 00:00:00","2017-03-06 00:00:00","2017-03-07 00:00:00","2017-03-08 00:00:00","2017-03-09 00:00:00","2017-03-10 00:00:00","2017-03-11 00:00:00","2017-03-12 00:00:00","2017-03-13 00:00:00","2017-03-14 00:00:00","2017-03-15 00:00:00","2017-03-16 00:00:00","2017-03-17 00:00:00","2017-03-18 00:00:00","2017-03-19 00:00:00","2017-03-20 00:00:00","2017-03-21 00:00:00","2017-03-22 00:00:00","2017-03-23 00:00:00","2017-03-24 00:00:00","2017-03-25 00:00:00","2017-03-26 00:00:00","2017-03-27 00:00:00","2017-03-28 00:00:00","2017-03-29 00:00:00","2017-03-30 00:00:00","2017-03-31 00:00:00","2017-04-01 00:00:00","2017-04-02 00:00:00","2017-04-03 00:00:00","2017-04-04 00:00:00","2017-04-05 00:00:00","2017-04-06 00:00:00","2017-04-07 00:00:00","2017-04-08 00:00:00","2017-04-09 00:00:00","2017-04-10 00:00:00","2017-04-11 00:00:00","2017-04-12 00:00:00","2017-04-13 00:00:00","2017-04-14 00:00:00","2017-04-15 00:00:00","2017-04-16 00:00:00","2017-04-17 00:00:00","2017-04-18 00:00:00","2017-04-19 00:00:00","2017-04-20 00:00:00","2017-04-21 00:00:00","2017-04-22 00:00:00","2017-04-23 00:00:00","2017-04-24 00:00:00","2017-04-25 00:00:00","2017-04-26 00:00:00","2017-04-27 00:00:00","2017-04-28 00:00:00","2017-04-29 00:00:00","2017-04-30 00:00:00","2017-05-01 00:00:00","2017-05-02 00:00:00","2017-05-03 00:00:00","2017-05-04 00:00:00","2017-05-05 00:00:00","2017-05-06 00:00:00","2017-05-07 00:00:00","2017-05-08 00:00:00","2017-05-09 00:00:00","2017-05-10 00:00:00","2017-05-11 00:00:00","2017-05-12 00:00:00","2017-05-13 00:00:00","2017-05-14 00:00:00","2017-05-15 00:00:00","2017-05-16 00:00:00","2017-05-17 00:00:00","2017-05-18 00:00:00","2017-05-19 00:00:00","2017-05-20 00:00:00","2017-05-21 00:00:00","2017-05-22 00:00:00","2017-05-23 00:00:00","2017-05-24 00:00:00","2017-05-25 00:00:00","2017-05-26 00:00:00","2017-05-27 00:00:00","2017-05-28 00:00:00","2017-05-29 00:00:00","2017-05-30 00:00:00","2017-05-31 00:00:00","2017-06-01 00:00:00","2017-06-02 00:00:00","2017-06-03 00:00:00","2017-06-04 00:00:00","2017-06-05 00:00:00","2017-06-06 00:00:00","2017-06-07 00:00:00","2017-06-08 00:00:00","2017-06-09 00:00:00","2017-06-10 00:00:00","2017-06-11 00:00:00","2017-06-12 00:00:00","2017-06-13 00:00:00","2017-06-14 00:00:00","2017-06-15 00:00:00","2017-06-16 00:00:00","2017-06-17 00:00:00","2017-06-18 00:00:00","2017-06-19 00:00:00","2017-06-20 00:00:00","2017-06-21 00:00:00","2017-06-22 00:00:00","2017-06-23 00:00:00","2017-06-24 00:00:00","2017-06-25 00:00:00","2017-06-26 00:00:00","2017-06-27 00:00:00","2017-06-28 00:00:00","2017-06-29 00:00:00","2017-06-30 00:00:00","2017-07-01 00:00:00","2017-07-02 00:00:00","2017-07-03 00:00:00","2017-07-04 00:00:00","2017-07-05 00:00:00","2017-07-06 00:00:00","2017-07-07 00:00:00","2017-07-08 00:00:00","2017-07-09 00:00:00","2017-07-10 00:00:00","2017-07-11 00:00:00","2017-07-12 00:00:00","2017-07-13 00:00:00","2017-07-14 00:00:00","2017-07-15 00:00:00","2017-07-16 00:00:00","2017-07-17 00:00:00","2017-07-18 00:00:00","2017-07-19 00:00:00","2017-07-20 00:00:00","2017-07-21 00:00:00","2017-07-22 00:00:00","2017-07-23 00:00:00","2017-07-24 00:00:00","2017-07-25 00:00:00","2017-07-26 00:00:00","2017-07-27 00:00:00","2017-07-28 00:00:00","2017-07-29 00:00:00","2017-07-30 00:00:00","2017-07-31 00:00:00","2017-08-01 00:00:00","2017-08-02 00:00:00","2017-08-03 00:00:00","2017-08-04 00:00:00","2017-08-05 00:00:00","2017-08-06 00:00:00","2017-08-07 00:00:00","2017-08-08 00:00:00","2017-08-09 00:00:00","2017-08-10 00:00:00","2017-08-11 00:00:00","2017-08-12 00:00:00","2017-08-13 00:00:00","2017-08-14 00:00:00","2017-08-15 00:00:00","2017-08-16 00:00:00","2017-08-17 00:00:00","2017-08-18 00:00:00","2017-08-19 00:00:00","2017-08-20 00:00:00","2017-08-21 00:00:00","2017-08-22 00:00:00","2017-08-23 00:00:00","2017-08-24 00:00:00","2017-08-25 00:00:00","2017-08-26 00:00:00","2017-08-27 00:00:00","2017-08-28 00:00:00","2017-08-29 00:00:00","2017-08-30 00:00:00","2017-08-31 00:00:00","2017-09-01 00:00:00","2017-09-02 00:00:00","2017-09-03 00:00:00","2017-09-04 00:00:00","2017-09-05 00:00:00","2017-09-06 00:00:00","2017-09-07 00:00:00","2017-09-08 00:00:00","2017-09-09 00:00:00","2017-09-10 00:00:00","2017-09-11 00:00:00","2017-09-12 00:00:00","2017-09-13 00:00:00","2017-09-14 00:00:00","2017-09-15 00:00:00","2017-09-16 00:00:00","2017-09-17 00:00:00","2017-09-18 00:00:00","2017-09-19 00:00:00","2017-09-20 00:00:00","2017-09-21 00:00:00","2017-09-22 00:00:00","2017-09-23 00:00:00","2017-09-24 00:00:00","2017-09-25 00:00:00","2017-09-26 00:00:00","2017-09-27 00:00:00","2017-09-28 00:00:00","2017-09-29 00:00:00","2017-09-30 00:00:00","2017-10-01 00:00:00","2017-10-02 00:00:00","2017-10-03 00:00:00","2017-10-04 00:00:00","2017-10-05 00:00:00","2017-10-06 00:00:00","2017-10-07 00:00:00","2017-10-08 00:00:00","2017-10-09 00:00:00","2017-10-10 00:00:00","2017-10-11 00:00:00","2017-10-12 00:00:00","2017-10-13 00:00:00","2017-10-14 00:00:00","2017-10-15 00:00:00","2017-10-16 00:00:00","2017-10-17 00:00:00","2017-10-18 00:00:00","2017-10-19 00:00:00","2017-10-20 00:00:00","2017-10-21 00:00:00","2017-10-22 00:00:00","2017-10-23 00:00:00","2017-10-24 00:00:00","2017-10-25 00:00:00","2017-10-26 00:00:00","2017-10-27 00:00:00","2017-10-28 00:00:00","2017-10-29 00:00:00","2017-10-30 00:00:00","2017-10-31 00:00:00","2017-11-01 00:00:00","2017-11-02 00:00:00","2017-11-03 00:00:00","2017-11-04 00:00:00","2017-11-05 00:00:00","2017-11-06 00:00:00","2017-11-07 00:00:00","2017-11-08 00:00:00","2017-11-09 00:00:00","2017-11-10 00:00:00","2017-11-11 00:00:00","2017-11-12 00:00:00","2017-11-13 00:00:00","2017-11-14 00:00:00","2017-11-15 00:00:00","2017-11-16 00:00:00","2017-11-17 00:00:00","2017-11-18 00:00:00","2017-11-19 00:00:00","2017-11-20 00:00:00","2017-11-21 00:00:00","2017-11-22 00:00:00","2017-11-23 00:00:00","2017-11-24 00:00:00","2017-11-25 00:00:00","2017-11-26 00:00:00","2017-11-27 00:00:00","2017-11-28 00:00:00","2017-11-29 00:00:00","2017-11-30 00:00:00","2017-12-01 00:00:00","2017-12-02 00:00:00","2017-12-03 00:00:00","2017-12-04 00:00:00","2017-12-05 00:00:00","2017-12-06 00:00:00","2017-12-07 00:00:00","2017-12-08 00:00:00","2017-12-09 00:00:00","2017-12-10 00:00:00","2017-12-11 00:00:00","2017-12-12 00:00:00","2017-12-13 00:00:00","2017-12-14 00:00:00","2017-12-15 00:00:00","2017-12-16 00:00:00","2017-12-17 00:00:00","2017-12-18 00:00:00","2017-12-19 00:00:00","2017-12-20 00:00:00","2017-12-21 00:00:00","2017-12-22 00:00:00","2017-12-23 00:00:00","2017-12-24 00:00:00","2017-12-25 00:00:00","2017-12-26 00:00:00","2017-12-27 00:00:00","2017-12-28 00:00:00","2017-12-29 00:00:00","2017-12-30 00:00:00","2017-12-31 00:00:00"],"max_temp_f":{"__ndarray__":"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","dtype":"float64","shape":[731]}}},"id":"c8e4c3ec-32d6-4eca-8f65-35c57cc7c280","type":"ColumnDataSource"}],"root_ids":["eec89a8f-7e4c-4308-9bd1-26424f19b3b8"]},"title":"Bokeh Application","version":"0.12.14"}};
+  var render_items = [{"docid":"610268f8-e3ed-4d7d-94fd-28e0a0d0b792","elementid":"e278f016-3588-4f02-9e0c-c7ab39ec30ec","modelid":"eec89a8f-7e4c-4308-9bd1-26424f19b3b8"}];
+  root.Bokeh.embed.embed_items_notebook(docs_json, render_items);
+
+  }
+  if (root.Bokeh !== undefined) {
+    embed_document(root);
+  } else {
+    var attempts = 0;
+    var timer = setInterval(function(root) {
+      if (root.Bokeh !== undefined) {
+        embed_document(root);
+        clearInterval(timer);
+      }
+      attempts++;
+      if (attempts > 100) {
+        console.log("Bokeh: ERROR: Unable to run BokehJS code because BokehJS library is missing")
+        clearInterval(timer);
+      }
+    }, 10, root)
+  }
+})(window);
+</script>
+</div>
