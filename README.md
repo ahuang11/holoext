@@ -20,7 +20,7 @@ curves = hv.Curve(df, 'day', 'min_temp_f', label='Max Temp', group='KCMI') * \
          hv.Curve(df, 'day', 'max_temp_f', label='Min Temp', group='KCMI')
 curves  # curve without mod
 ```
-![Before Mod](https://raw.githubusercontent.com/ahuang11/holoext/master/docs/examples/quick_start_before.png)
+![Before Mod](https://raw.githubusercontent.com/ahuang11/holoext/master/docs/examples/static_output/quick_start_before.png)
 
 ### Then simply apply the mod!
 ```python
@@ -34,7 +34,7 @@ However, these mods are not fixed in stone; you can easily adjust it:<br />
 If you would like to show the hover tool in the toolbar, it's easily done too:<br />
 `Mod(show_hover=True)`
 
-![After Mod](https://raw.githubusercontent.com/ahuang11/holoext/master/docs/examples/quick_start_after.png)
+![After Mod](https://raw.githubusercontent.com/ahuang11/holoext/master/docs/examples/static_output/quick_start_after.png)
 
 ### Apply more settings easily and save to .html by passing in any string argument to .apply()
 ```python
@@ -44,13 +44,13 @@ mod_curves = Mod(
 ).apply(curves, save='html_output/kcmi_2016_2017_temps')
 mod_curves
 ```
-![After Mod with Settings](https://raw.githubusercontent.com/ahuang11/holoext/master/docs/examples/quick_start_final.png)
+![After Mod with Settings](https://raw.githubusercontent.com/ahuang11/holoext/master/docs/examples/static_output/quick_start_final.png)
 
 ## Check out the [gallery](https://holoext.readthedocs.io/en/latest/examples/gallery.html) to see it work for all types of plots like these!
 
-![Station Temperature and Precipitation](https://raw.githubusercontent.com/ahuang11/holoext/master/docs/examples/gallery_station_temperature_and_precipitation.png)
+![Station Temperature and Precipitation](https://raw.githubusercontent.com/ahuang11/holoext/master/docs/examples/static_output/gallery_station_temperature_and_precipitation.png)
 
-![ORD Wind Speed and Wind Direction](https://raw.githubusercontent.com/ahuang11/holoext/master/docs/examples/gallery_ord_wind_speed_wind_dir.png)
+![ORD Wind Speed and Wind Direction](https://raw.githubusercontent.com/ahuang11/holoext/master/docs/examples/static_output/gallery_ord_wind_speed_wind_dir.png)
 
 ## HOW TO GET IT:
 Method 1
