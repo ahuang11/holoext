@@ -6,13 +6,13 @@
 1. 'intelligent' resizing and activation of tools in addition to grid lines
 2. a straightforward method of saving to file `.apply(plot, 'name_of_file')`
 3. immediate application of a minimalistic style to plots
-4. [keywords like `xlim`, `ylim`, `xlabel`, `ylabel`, `title` can be used](https://github.com/ahuang11/holoext/blob/master/examples/matplotlib_xlim_ylim_xlabel_ylabel_title.ipynb)
-5. [user forgiving parsing of toolbar and legend locs](https://github.com/ahuang11/holoext/blob/master/examples/amend_loc_keyword_showcase.ipynb)
-6. [automatic discretization of color bars](https://github.com/ahuang11/holoext/blob/master/examples/changing_colorbar_cmap.ipynb)
-7. [color maps (color tables) from NCAR Command Language (NCL)](https://github.com/ahuang11/holoext/blob/master/examples/changing_colorbar_cmap.ipynb)
-8. [And more!](https://github.com/ahuang11/holoext/tree/master/examples)
+4. [keywords like `xlim`, `ylim`, `xlabel`, `ylabel`, `title` can be used](https://holoext.readthedocs.io/en/latest/examples/matplotlib_xlim_ylim_xlabel_ylabel_title.html)
+5. [user forgiving parsing of toolbar and legend locs](https://holoext.readthedocs.io/en/latest/examples/amend_loc_keyword_showcase.html)
+6. [automatic discretization of color bars](https://holoext.readthedocs.io/en/latest/examples/changing_colorbar_cmap.html)
+7. [color maps (color tables) from NCAR Command Language (NCL)](https://holoext.readthedocs.io/en/latest/examples/changing_colorbar_cmap.html)
+8. [And more!](https://holoext.readthedocs.io/en/latest/examples/user_guide.html)
 
-## Here's some motivation to [get started!](https://github.com/ahuang11/holoext/blob/master/examples/quick_start.ipynb)
+## Here's some motivation to [get started!](https://holoext.readthedocs.io/en/latest/examples/quick_start.html)
 
 ### Do your plotting as usual in Holoviews.
 ```python
@@ -46,14 +46,22 @@ mod_curves
 ```
 ![After Mod with Settings](https://raw.githubusercontent.com/ahuang11/holoext/master/docs/examples/quick_start_final.png)
 
-## Check out the [gallery](https://github.com/ahuang11/holoext/blob/master/examples/gallery.ipynb) to see it work for all types of plots like these!
+## Check out the [gallery](https://holoext.readthedocs.io/en/latest/examples/gallery.html) to see it work for all types of plots like these!
 
 ![Station Temperature and Precipitation](https://raw.githubusercontent.com/ahuang11/holoext/master/docs/examples/gallery_station_temperature_and_precipitation.png)
 
 ![ORD Wind Speed and Wind Direction](https://raw.githubusercontent.com/ahuang11/holoext/master/docs/examples/gallery_ord_wind_speed_wind_dir.png)
 
 ## HOW TO GET IT:
-1. `pip install holoext`
+Method 1
+1. `pip install holoext`  # actually not yet in... PyPi is being spammed so they disabled it temporarily...
 2. Ensure your packages version (`pip list`) match with ones listed in requirements.txt
+
+Method 2
+1. Type `git clone https://github.com/ahuang11/holoext`
+2. Go into holoext folder (where setup.py is)
+3. Type `pip install -e .`
+
+### Check out the docs [here](https://holoext.readthedocs.io/en/latest/index.html)!
 
 ### Random, but awesome, tips: https://github.com/ahuang11/ahhsumtips
