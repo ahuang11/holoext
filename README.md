@@ -1,4 +1,4 @@
-# HoloExt - HoloViews Extension Mod v0.0.1
+# HoloExt - HoloViews Extension Mod v0.0.2
 
 ### An extension to beautify your plots and process.
 
@@ -54,7 +54,7 @@ mod_curves
 
 ## HOW TO GET IT:
 Method 1
-1. `pip install holoext`  # actually not yet in... PyPi is being spammed so they disabled it temporarily...
+1. `pip install holoext`
 2. Ensure your packages version (`pip list`) match with ones listed in requirements.txt
 
 Method 2

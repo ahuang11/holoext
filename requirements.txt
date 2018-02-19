@@ -1,5 +1,6 @@
-holoviews
-bokeh
-numpy
-pandas
-matplotlib
+holoviews==1.9.4
+bokeh==0.12.14
+numpy==1.14.0
+pandas==0.22.0
+matplotlib==2.1.2
+dask==0.17.0

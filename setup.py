@@ -1,19 +1,21 @@
 from setuptools import setup
 
 setup(name='holoext',
-      version='0.0.1',
+      version='0.0.2',
       description='Holoviews Extension',
       url='http://github.com/ahuang11/holoext',
       author='Andrew Huang',
       author_email='huang.andrew12@gmail.com',
       license='MIT',
       packages=['holoext'],
+      include_package_data=True,
       install_requires=[
                         'matplotlib',
                         'numpy',
                         'pandas',
                         'holoviews',
-                        'bokeh'
+                        'bokeh',
+	  		'dask'
                         ],
       keywords=['data', 'visualization',
                 'holoviews', 'bokeh',
