@@ -1,13 +1,18 @@
 # -*- coding: utf-8 -*-
 
+import os
 import holoviews as hv
 
 from bokeh import models
+from bokeh.io import export_svgs
+from bokeh.layouts import layout
+from bokeh.plotting import Figure
 from bokeh.plotting.helpers import _tool_from_string
 from holoviews.plotting.bokeh.__init__ import associations
 
-from holoext.utils import DEFAULT_N, get_cmap
+from holoext.utils import DEFAULT_N, get_cmap, flatten, tidy_fn
 
+SVG_STR = 'svg'
 BACKEND = 'bokeh'
 HOVER_STR = 'hover'
 DEFAULT_STR = 'default'
@@ -486,6 +491,33 @@ class Mod(object):
             label_sizes[label] = label_size_str + 'em'
         return label_sizes
 
+    def _get_figures_core(self, objs):
+        if isinstance(objs, list):
+            objs = [self._get_figures_core(plot) for plot in objs]
+        elif isinstance(objs, (models.Column, models.Row)):
+            objs = [self._get_figures_core(child) for child in objs.children
+                     if not isinstance(child, (models.ToolbarBox, models.WidgetBox))]
+        return objs
+
+    def _get_figures(self, objs):
+        return list(flatten(self._get_figures_core(objs)))
+
+    def _save_to_svg(self, bokeh_obj, save_fn):
+        figures = self._get_figures(bokeh_obj)
+        for i, figure in enumerate(figures):
+            figure.output_backend = SVG_STR
+
+            if len(figures) != 1:
+                if not os.path.exists(save_fn):
+                    os.mkdir(save_fn)
+                tidied_title = tidy_fn(figure.title.text)
+                save_fn = '{0}/{1}_{2}'.format(save_fn, tidied_title, i)
+
+            if not save_fn.endswith(SVG_STR):
+                save_fn = '{0}.{1}'.format(save_fn, SVG_STR)
+
+            export_svgs(figure, save_fn)
+
     def apply(self, obj, save='', fmt=None):
         """Applies settings from Mod() to a HoloViews object
 
@@ -562,6 +594,10 @@ class Mod(object):
 
         if save != '':
             renderer = hv.renderer(BACKEND)
-            renderer.save(obj, save, fmt=fmt)
+            if fmt != SVG_STR:
+                renderer.save(obj, save, fmt=fmt)
+            else:
+                bokeh_obj = renderer.get_plot(obj).state
+                self._save_to_svg(bokeh_obj, save)
 
         return obj
