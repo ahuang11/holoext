@@ -5,8 +5,6 @@ import holoviews as hv
 
 from bokeh import models
 from bokeh.io import export_svgs
-from bokeh.layouts import layout
-from bokeh.plotting import Figure
 from bokeh.plotting.helpers import _tool_from_string
 from holoviews.plotting.bokeh.__init__ import associations
 
@@ -353,7 +351,7 @@ class Mod(object):
             elif 'bottom' in loc and not loc.startswith('bottom'):
                 loc = self._flip_loc_keyword(loc)
             elif 'center' in loc and not loc.startswith('center') and \
-                ('top' not in loc and 'bottom' not in loc):
+                    ('top' not in loc and 'bottom' not in loc):
                 loc = self._flip_loc_keyword(loc)
 
             return loc.strip('_')
@@ -496,27 +494,34 @@ class Mod(object):
             objs = [self._get_figures_core(plot) for plot in objs]
         elif isinstance(objs, (models.Column, models.Row)):
             objs = [self._get_figures_core(child) for child in objs.children
-                     if not isinstance(child, (models.ToolbarBox, models.WidgetBox))]
+                    if not isinstance(child, (models.ToolbarBox,
+                                              models.WidgetBox))]
         return objs
 
     def _get_figures(self, objs):
-        return list(flatten(self._get_figures_core(objs)))
+        try:
+            return list(flatten(self._get_figures_core(objs)))
+        except TypeError:
+            return [self._get_figures_core(objs)]
 
-    def _save_to_svg(self, bokeh_obj, save_fn):
+    def _save_to_svg(self, bokeh_obj, save):
         figures = self._get_figures(bokeh_obj)
         for i, figure in enumerate(figures):
             figure.output_backend = SVG_STR
 
             if len(figures) != 1:
-                if not os.path.exists(save_fn):
-                    os.mkdir(save_fn)
+                if not os.path.exists(save):
+                    os.mkdir(save)
                 tidied_title = tidy_fn(figure.title.text)
-                save_fn = '{0}/{1}_{2}'.format(save_fn, tidied_title, i)
+                save_fp = os.path.join(
+                    save, '{0}_{1}'.format(tidied_title, i))
+            else:
+                save_fp = save
 
-            if not save_fn.endswith(SVG_STR):
-                save_fn = '{0}.{1}'.format(save_fn, SVG_STR)
+            if not save_fp.endswith(SVG_STR):
+                save_fp = '{0}.{1}'.format(save_fp, SVG_STR)
 
-            export_svgs(figure, save_fn)
+            export_svgs(figure, save_fp)
 
     def apply(self, obj, save='', fmt=None):
         """Applies settings from Mod() to a HoloViews object
