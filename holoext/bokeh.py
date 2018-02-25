@@ -1,3 +1,7 @@
+# fix order of hovertool
+# add tests
+# hover tool tips
+
 # -*- coding: utf-8 -*-
 
 import os
@@ -378,12 +382,27 @@ class Mod(object):
 
     def _set_tools(self, p):
         if p not in self.p_list:  # don't rerun if already run
-            if self.tools is None:
+            if self.tools is None:  # tools = None
                 self.tools = [DEFAULT_STR, HOVER_STR]
-            elif isinstance(self.tools, list) and ',' in self.tools[0]:
-                self.tools = self.tools[0].replace(' ', '').split(',')
-            elif not isinstance(self.tools, list):
+            elif isinstance(self.tools, list):
+                # ['wheel_zoom, default']
+                if (all(isinstance(tool, str) for tool in self.tools)
+                    and len(self.tools) == 1):
+                        self.tools = self.tools[0].replace(' ', '').split(',')
+                else:
+                    # [HoverTool, 'default']
+                    tool_list = []
+                    for tool in self.tools:
+                        if isinstance(tool, str):
+                            tool_str_list = tool.replace(' ', '').split(',')
+                            tool_list.extend(tool_str_list)
+                        else:
+                            tool_list.append(tool)
+                    self.tools = tool_list
+            elif isinstance(self.tools, str):  # tools = 'hover, default'
                 self.tools = self.tools.replace(' ', '').split(',')
+            elif not isinstance(self.tools, list):
+                self.tools = [self.tools]
 
             tools = []
             for tool in p.tools:  # add hover tools
@@ -409,8 +428,10 @@ class Mod(object):
                     if isinstance(tool, str):
                         tools.append(_tool_from_string(tool))
                     elif tool:  # I forget why this logic works?
+                        # handle customized hover tools
+                        if isinstance(tool, models.HoverTool):
+                            tool.toggleable = self.show_hover
                         tools.append(tool)
-
             self.tools_dict[p] = tools
 
         p.tools = self.tools_dict[p]
@@ -573,7 +594,10 @@ class Mod(object):
             **self.plot_kwargs
         )
 
-        cmap = get_cmap(self.colorbar_cmap, n=self.colorbar_n)
+        if self.colorbar_cmap is not None:
+            cmap = get_cmap(self.colorbar_cmap, n=self.colorbar_n)
+        else:
+            cmap = None
         generic_style_dict = dict(cmap=cmap)
 
         generic_norm_dict = dict(
