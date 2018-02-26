@@ -1,0 +1,18 @@
+channels:
+  - conda-forge
+dependencies:
+  - python==3.5
+  - sphinx>=1.4
+  - pandoc
+  - nbconvert
+  - ipykernel
+  - pip:
+    - nbsphinx
+    - ipykernel
+    - holoviews==1.9.4
+    - bokeh==0.12.14
+    - numpy==1.14.0
+    - pandas==0.22.0
+    - matplotlib==2.1.2
+    - dask==0.17.0
+
