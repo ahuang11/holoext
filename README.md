@@ -1,4 +1,4 @@
-# HoloExt - HoloViews Extension Mod v0.0.2
+# HoloExt - HoloViews Extension Mod v0.0.3
 
 ### An extension to beautify your plots and process.
 
@@ -46,7 +46,7 @@ mod_curves
 ```
 ![After Mod with Settings](https://raw.githubusercontent.com/ahuang11/holoext/master/docs/examples/static_output/quick_start_final.png)
 
-## Check out the [gallery](https://holoext.readthedocs.io/en/latest/examples/gallery.html) to see it work for all types of plots like these!
+## Check out the [gallery](https://holoext.readthedocs.io/en/latest/docs/examples/gallery.html) to see it work for all types of plots like these!
 
 ![Station Temperature and Precipitation](https://raw.githubusercontent.com/ahuang11/holoext/master/docs/examples/static_output/gallery_station_temperature_and_precipitation.png)
 

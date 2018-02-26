@@ -1,13 +1,20 @@
+# fix order of hovertool
+# add tests
+# hover tool tips
+
 # -*- coding: utf-8 -*-
 
+import os
 import holoviews as hv
 
 from bokeh import models
+from bokeh.io import export_svgs
 from bokeh.plotting.helpers import _tool_from_string
 from holoviews.plotting.bokeh.__init__ import associations
 
-from holoext.utils import DEFAULT_N, get_cmap
+from holoext.utils import DEFAULT_N, get_cmap, flatten, tidy_fn
 
+SVG_STR = 'svg'
 BACKEND = 'bokeh'
 HOVER_STR = 'hover'
 DEFAULT_STR = 'default'
@@ -348,7 +355,7 @@ class Mod(object):
             elif 'bottom' in loc and not loc.startswith('bottom'):
                 loc = self._flip_loc_keyword(loc)
             elif 'center' in loc and not loc.startswith('center') and \
-                ('top' not in loc and 'bottom' not in loc):
+                    ('top' not in loc and 'bottom' not in loc):
                 loc = self._flip_loc_keyword(loc)
 
             return loc.strip('_')
@@ -375,12 +382,27 @@ class Mod(object):
 
     def _set_tools(self, p):
         if p not in self.p_list:  # don't rerun if already run
-            if self.tools is None:
+            if self.tools is None:  # tools = None
                 self.tools = [DEFAULT_STR, HOVER_STR]
-            elif isinstance(self.tools, list) and ',' in self.tools[0]:
-                self.tools = self.tools[0].replace(' ', '').split(',')
-            elif not isinstance(self.tools, list):
+            elif isinstance(self.tools, list):
+                # ['wheel_zoom, default']
+                if (all(isinstance(tool, str) for tool in self.tools)
+                    and len(self.tools) == 1):
+                        self.tools = self.tools[0].replace(' ', '').split(',')
+                else:
+                    # [HoverTool, 'default']
+                    tool_list = []
+                    for tool in self.tools:
+                        if isinstance(tool, str):
+                            tool_str_list = tool.replace(' ', '').split(',')
+                            tool_list.extend(tool_str_list)
+                        else:
+                            tool_list.append(tool)
+                    self.tools = tool_list
+            elif isinstance(self.tools, str):  # tools = 'hover, default'
                 self.tools = self.tools.replace(' ', '').split(',')
+            elif not isinstance(self.tools, list):
+                self.tools = [self.tools]
 
             tools = []
             for tool in p.tools:  # add hover tools
@@ -406,8 +428,10 @@ class Mod(object):
                     if isinstance(tool, str):
                         tools.append(_tool_from_string(tool))
                     elif tool:  # I forget why this logic works?
+                        # handle customized hover tools
+                        if isinstance(tool, models.HoverTool):
+                            tool.toggleable = self.show_hover
                         tools.append(tool)
-
             self.tools_dict[p] = tools
 
         p.tools = self.tools_dict[p]
@@ -486,6 +510,40 @@ class Mod(object):
             label_sizes[label] = label_size_str + 'em'
         return label_sizes
 
+    def _get_figures_core(self, objs):
+        if isinstance(objs, list):
+            objs = [self._get_figures_core(plot) for plot in objs]
+        elif isinstance(objs, (models.Column, models.Row)):
+            objs = [self._get_figures_core(child) for child in objs.children
+                    if not isinstance(child, (models.ToolbarBox,
+                                              models.WidgetBox))]
+        return objs
+
+    def _get_figures(self, objs):
+        try:
+            return list(flatten(self._get_figures_core(objs)))
+        except TypeError:
+            return [self._get_figures_core(objs)]
+
+    def _save_to_svg(self, bokeh_obj, save):
+        figures = self._get_figures(bokeh_obj)
+        for i, figure in enumerate(figures):
+            figure.output_backend = SVG_STR
+
+            if len(figures) != 1:
+                if not os.path.exists(save):
+                    os.mkdir(save)
+                tidied_title = tidy_fn(figure.title.text)
+                save_fp = os.path.join(
+                    save, '{0}_{1}'.format(tidied_title, i))
+            else:
+                save_fp = save
+
+            if not save_fp.endswith(SVG_STR):
+                save_fp = '{0}.{1}'.format(save_fp, SVG_STR)
+
+            export_svgs(figure, save_fp)
+
     def apply(self, obj, save='', fmt=None):
         """Applies settings from Mod() to a HoloViews object
 
@@ -536,7 +594,10 @@ class Mod(object):
             **self.plot_kwargs
         )
 
-        cmap = get_cmap(self.colorbar_cmap, n=self.colorbar_n)
+        if self.colorbar_cmap is not None:
+            cmap = get_cmap(self.colorbar_cmap, n=self.colorbar_n)
+        else:
+            cmap = None
         generic_style_dict = dict(cmap=cmap)
 
         generic_norm_dict = dict(
@@ -562,6 +623,10 @@ class Mod(object):
 
         if save != '':
             renderer = hv.renderer(BACKEND)
-            renderer.save(obj, save, fmt=fmt)
+            if fmt != SVG_STR:
+                renderer.save(obj, save, fmt=fmt)
+            else:
+                bokeh_obj = renderer.get_plot(obj).state
+                self._save_to_svg(bokeh_obj, save)
 
         return obj

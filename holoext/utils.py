@@ -96,3 +96,37 @@ def get_cmap(colors, n=None, r=False, start=0, stop=1, **kwargs):
     colors = cmap(np.linspace(start, stop, cmap.N))
 
     return LinearSegmentedColormap.from_list('mycmap', colors=colors, N=n)
+
+
+def flatten(container):
+    """
+    Flattens a list/tuple with ANY number of levels of nesting, not just one.
+    Adapted from: https://stackoverflow.com/questions/10823877/
+    what-is-the-fastest-way-to-flatten-arbitrarily-nested-lists-in-python
+
+    Args:
+        container (list/tuple): a nested list or tuple
+
+    Returns:
+        cmap (generator): generator of unnested container
+    """
+    for i in container:
+        if isinstance(i, (list, tuple)):
+            for j in flatten(i):
+                yield j
+        else:
+            yield i
+
+
+def tidy_fn(fn):
+    """
+    Cleans up a string to be used as a valid file name
+
+    Args:
+        fn (str): file name to be cleansed
+
+    Returns:
+        tidied_fn (str): tidied file name
+    """
+    fn = ''.join(x for x in fn if (x.isalnum() or x in "[]()._- "))
+    return fn.lower().replace(' ', '_').replace(':', '')

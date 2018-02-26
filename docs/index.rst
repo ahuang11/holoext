@@ -7,12 +7,11 @@ Welcome to HoloExt's documentation!
 ===================================
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Contents:
 
    source/holoext
-   examples/gallery
-   examples/user_guide
+   examples/examples
 
 Indices and tables
 ==================

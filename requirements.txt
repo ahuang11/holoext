@@ -4,3 +4,6 @@ numpy==1.14.0
 pandas==0.22.0
 matplotlib==2.1.2
 dask==0.17.0
+sphinx>=1.4
+ipykernel
+nbsphinx
