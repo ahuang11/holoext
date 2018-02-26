@@ -12,19 +12,19 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-# import os
-# import sys
-# sys.path.insert(0, os.path.abspath('.'))
-
+import os
+import sys
+sys.path.insert(0, os.path.abspath('.'))
+sys.path.insert(0, os.path.abspath('../'))
 
 # -- Project information -----------------------------------------------------
 
-project = 'HoloExt'
+project = 'holoext'
 copyright = '2018, Andrew Huang'
 author = 'Andrew Huang'
 
 # The short X.Y version
-version = '0.1'
+version = '0.0.1'
 # The full version, including alpha/beta/rc tags
 release = '0.0.1'
 
@@ -40,10 +40,11 @@ release = '0.0.1'
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
-    'sphinx.ext.coverage',
+    'sphinx.ext.doctest',
     'sphinx.ext.viewcode',
     'sphinx.ext.githubpages',
-    'sphinx.ext.napoleon'
+    'sphinx.ext.napoleon',
+    'nbsphinx'
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -68,7 +69,7 @@ language = None
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path .
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '**.ipynb_checkpoints']
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'sphinx'
@@ -79,6 +80,7 @@ pygments_style = 'sphinx'
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
+
 html_theme = 'nature'
 
 # Theme options are theme-specific and customize the look and feel of a theme
@@ -106,7 +108,7 @@ html_static_path = ['_static']
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'HoloExtdoc'
+htmlhelp_basename = 'holoextdoc'
 
 
 # -- Options for LaTeX output ------------------------------------------------
@@ -133,7 +135,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'HoloExt.tex', 'HoloExt Documentation',
+    (master_doc, 'holoext.tex', 'holoext Documentation',
      'Andrew Huang', 'manual'),
 ]
 
@@ -143,7 +145,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'holoext', 'HoloExt Documentation',
+    (master_doc, 'holoext', 'holoext Documentation',
      [author], 1)
 ]
 
@@ -154,8 +156,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'HoloExt', 'HoloExt Documentation',
-     author, 'HoloExt', 'One line description of project.',
+    (master_doc, 'holoext', 'holoext Documentation',
+     author, 'holoext', 'One line description of project.',
      'Miscellaneous'),
 ]
 
