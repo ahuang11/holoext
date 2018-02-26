@@ -6,6 +6,8 @@ dependencies:
   - pandoc
   - nbconvert
   - ipykernel
+  - phantomjs
+  - selenium
   - pip:
     - nbsphinx
     - ipykernel
