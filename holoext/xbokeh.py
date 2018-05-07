@@ -594,6 +594,14 @@ class Mod(object):
             **self.plot_kwargs
         )
 
+        table_plot_dict = dict(
+            tools=[HOVER_STR],  # need to initialize it
+            width=self.width,
+            height=self.height,
+            fontsize=label_sizes,
+            merge_tools=self.merge_tools
+        )
+
         if self.colorbar_cmap is not None:
             cmap = get_cmap(self.colorbar_cmap, n=self.colorbar_n)
         else:
@@ -615,7 +623,10 @@ class Mod(object):
         style_dict = {}
         norm_dict = {}
         for figure in FIGURES:
-            plot_dict[figure] = generic_plot_dict
+            if figure != 'Table':
+                plot_dict[figure] = generic_plot_dict
+            else:
+                plot_dict[figure] = table_plot_dict
             style_dict[figure] = generic_style_dict
             norm_dict[figure] = generic_norm_dict
 

@@ -1,3 +1,7 @@
+### 1.0.0
+"from holoext.bokeh import Mod" is now "from holoext.xbokeh import Mod"
+Improved parsing of cmap string e.g. 'viridis_r_n=10_start=0.3_stop=0.7'
+
 ### 0.0.3
 Improved flexibility with tools input to allow for customized tools
 Allow colorbar_cmap=None
