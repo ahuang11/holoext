@@ -1,9 +1,9 @@
 ipykernel
 sphinx>=1.4
 nbsphinx
-holoviews==1.9.4
-bokeh==0.12.14
-numpy==1.14.0
-pandas==0.22.0
-matplotlib==2.1.2
-dask==0.17.0
+holoviews>=1.9.4
+bokeh>=0.12.14
+numpy>=1.14.0
+pandas>=0.22.0
+matplotlib>=2.1.2
+dask>=0.17.0

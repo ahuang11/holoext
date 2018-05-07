@@ -1,6 +1,8 @@
 import os
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap, rgb2hex
 
@@ -9,33 +11,6 @@ THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 NCL_CMAPS = pd.read_pickle(os.path.join(THIS_DIR, 'data', 'ncl_cmaps.pkl'))
 NCL_CMAP_NAMES = NCL_CMAPS.columns.tolist()
 DEFAULT_N = 7
-
-
-def get_color_list(cmap, hexcodes=False, **kwargs):
-    """
-    Converts a registered colormap into a list of RGB tuples or hexcodes
-
-    Args:
-        cmap_name (mpl.cmap/str): actual colormap or name of color
-        hexcodes (boolean): whether to return a list of hexcodes
-        kwargs (kwargs): additional keyword arguments
-
-    Returns:
-        :return cmap: (list): list of RGB tuples or hexcodes
-    """
-    if isinstance(cmap, str):
-        if cmap in NCL_CMAP_NAMES:
-            cmap = NCL_CMAPS[cmap].values[0]
-        else:
-            cmap = plt.get_cmap(cmap)
-
-    if not hexcodes:
-        color_list = [cmap(i)[:3] for i in range(cmap.N)]
-    else:
-        color_list = [rgb2hex(cmap(i)[:3])
-                      for i in range(cmap.N)]
-
-    return color_list
 
 
 def get_cmap(colors, n=None, r=False, start=0, stop=1, **kwargs):
@@ -55,12 +30,8 @@ def get_cmap(colors, n=None, r=False, start=0, stop=1, **kwargs):
     Returns:
         cmap (mpl.cmap): color map
     """
-    try:
-        if '_r' in colors:
-            colors = colors[:-2]
-            r = True
-    except:
-        pass
+    colors, n, r, start, stop = _parse_color_string(
+        colors, n=n, r=r, start=start, stop=stop)
 
     if colors in NCL_CMAP_NAMES:
         if r:
@@ -96,6 +67,56 @@ def get_cmap(colors, n=None, r=False, start=0, stop=1, **kwargs):
     colors = cmap(np.linspace(start, stop, cmap.N))
 
     return LinearSegmentedColormap.from_list('mycmap', colors=colors, N=n)
+
+
+def _parse_color_string(colors, n=None, r=False, start=0, stop=1):
+    """
+    Parses strings that are formatted like the following:
+
+    'RdBu_r_start=0.8_stop=0.9_n=10'
+    'viridis_start0.2_r_stop.5_n20'
+    'Greens_start0_n15'
+    """
+    color_settings = colors.split('_')
+    colors = color_settings[0]
+    for setting in color_settings[1:]:
+        setting = setting.replace('=', '')
+        if setting.startswith('n') and setting[1].isdigit():
+            n = int(setting[1:])
+        elif setting == 'r':
+            r = True
+        elif setting.startswith('start'):
+            start = float(setting[5:])
+        elif setting.startswith('stop'):
+            stop = float(setting[4:])
+    return colors, n, r, start, stop
+
+
+def get_color_list(cmap, hexcodes=False, **kwargs):
+    """
+    Converts a registered colormap into a list of RGB tuples or hexcodes
+
+    Args:
+        cmap_name (mpl.cmap/str): actual colormap or name of color
+        hexcodes (boolean): whether to return a list of hexcodes
+        kwargs (kwargs): additional keyword arguments
+
+    Returns:
+        :return cmap: (list): list of RGB tuples or hexcodes
+    """
+    if isinstance(cmap, str):
+        if cmap in NCL_CMAP_NAMES:
+            cmap = NCL_CMAPS[cmap].values[0]
+        else:
+            cmap = plt.get_cmap(cmap)
+
+    if not hexcodes:
+        color_list = [cmap(i)[:3] for i in range(cmap.N)]
+    else:
+        color_list = [rgb2hex(cmap(i)[:3])
+                      for i in range(cmap.N)]
+
+    return color_list
 
 
 def flatten(container):
