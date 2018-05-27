@@ -6,10 +6,9 @@ matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap, rgb2hex
 
-# https://www.ncl.ucar.edu/Document/Graphics/color_tables.shtml
+from holoext.data.ncl_cmap_names import NCL_CMAP_NAMES
+
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
-NCL_CMAPS = pd.read_pickle(os.path.join(THIS_DIR, 'data', 'ncl_cmaps.pkl'))
-NCL_CMAP_NAMES = NCL_CMAPS.columns.tolist()
 DEFAULT_N = 7
 
 
@@ -32,8 +31,10 @@ def get_cmap(colors, n=None, r=False, start=0, stop=1, **kwargs):
     """
     colors, n, r, start, stop = _parse_color_string(
         colors, n=n, r=r, start=start, stop=stop)
-
+    
+    # https://www.ncl.ucar.edu/Document/Graphics/color_tables.shtml
     if colors in NCL_CMAP_NAMES:
+        NCL_CMAPS = pd.read_pickle(os.path.join(THIS_DIR, 'data', 'ncl_cmaps.pkl'))
         if r:
             color_list = get_color_list(NCL_CMAPS[colors].values[0])[::-1]
             cmap = LinearSegmentedColormap.from_list('cmap',
@@ -77,18 +78,19 @@ def _parse_color_string(colors, n=None, r=False, start=0, stop=1):
     'viridis_start0.2_r_stop.5_n20'
     'Greens_start0_n15'
     """
-    color_settings = colors.split('_')
-    colors = color_settings[0]
-    for setting in color_settings[1:]:
-        setting = setting.replace('=', '')
-        if setting.startswith('n') and setting[1].isdigit():
-            n = int(setting[1:])
-        elif setting == 'r':
-            r = True
-        elif setting.startswith('start'):
-            start = float(setting[5:])
-        elif setting.startswith('stop'):
-            stop = float(setting[4:])
+    if isinstance(colors, str):
+        color_settings = colors.split('_')
+        colors = color_settings[0]
+        for setting in color_settings[1:]:
+            setting = setting.replace('=', '')
+            if setting.startswith('n') and setting[1].isdigit():
+                n = int(setting[1:])
+            elif setting == 'r':
+                r = True
+            elif setting.startswith('start'):
+                start = float(setting[5:])
+            elif setting.startswith('stop'):
+                stop = float(setting[4:])
     return colors, n, r, start, stop
 
 
