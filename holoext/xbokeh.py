@@ -96,6 +96,7 @@ class Mod(object):
             merge_tools=False,
             framewise=False,
             axiswise=False,
+            finalize_hooks=None,
             **plot_kwargs
             ):
         """Extension Mod for HoloViews' Bokeh Backend
@@ -253,6 +254,11 @@ class Mod(object):
         self.merge_tools = merge_tools
         self.framewise = framewise
         self.axiswise = axiswise
+
+        if finalize_hooks is not None:
+            self.finalize_hooks = finalize_hooks
+        else:
+            self.finalize_hooks = []
 
         self.plot_kwargs = plot_kwargs
 
@@ -590,7 +596,7 @@ class Mod(object):
             colorbar=self.colorbar,
             colorbar_opts=colorbar_dict,
             title_format=self.title_format,
-            finalize_hooks=[self._adjust_state],
+            finalize_hooks=self.finalize_hooks + [self._adjust_state],
             **self.plot_kwargs
         )
 
