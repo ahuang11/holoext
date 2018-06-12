@@ -24,9 +24,9 @@ copyright = '2018, Andrew Huang'
 author = 'Andrew Huang'
 
 # The short X.Y version
-version = '0.0.3'
+version = '1.0.2'
 # The full version, including alpha/beta/rc tags
-release = '0.0.3'
+release = '1.0.2'
 
 
 # -- General configuration ---------------------------------------------------
