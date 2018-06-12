@@ -24,6 +24,8 @@ curves  # curve without mod
 
 ### Then simply apply the mod!
 ```python
+from holoext.xbokeh import Mod
+
 Mod().apply(curves)
 ```
 This automatically increases figure size, applies a minimalistic look, and adds the hover tool, albeit hidden in the toolbar.
