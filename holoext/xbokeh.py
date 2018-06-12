@@ -1,16 +1,14 @@
-# fix order of hovertool
-# add tests
-# hover tool tips
-
 # -*- coding: utf-8 -*-
 
 import os
+import math
 import holoviews as hv
 
 from bokeh import models
 from bokeh.io import export_svgs
 from bokeh.plotting.helpers import _tool_from_string
 from holoviews.plotting.bokeh.__init__ import associations
+from geoviews.plotting.bokeh.__init__ import options
 
 from holoext.utils import DEFAULT_N, get_cmap, flatten, tidy_fn
 
@@ -48,10 +46,10 @@ DEFAULT_TOOLS = dict(
 class Mod(object):
     def __init__(
             self,
-            title_format='',
-            title='',
-            xlabel='',
-            ylabel='',
+            title_format=None,
+            title=None,
+            xlabel=None,
+            ylabel=None,
             neaten_io=True,
             width=None,
             height=None,
@@ -73,7 +71,8 @@ class Mod(object):
             show_hover=False,
             logo='normal',
             toolbar_location='above',
-            legend_location='top_right',
+            legend_position=None,
+            legend_location=None,
             legend_orientation='horizontal',
             legend_background_fill_alpha=0.5,
             legend_border_line_alpha=0,
@@ -83,6 +82,9 @@ class Mod(object):
             colorbar=True,
             colorbar_n=DEFAULT_N,
             colorbar_cmap='viridis',
+            cmap=None,
+            colorbar_lim=None,
+            zlim=None,
             colorbar_title='',
             colorbar_label_align='center',
             colorbar_tick_alpha=0,
@@ -96,6 +98,7 @@ class Mod(object):
             merge_tools=False,
             framewise=False,
             axiswise=False,
+            finalize_hooks=None,
             **plot_kwargs
             ):
         """Extension Mod for HoloViews' Bokeh Backend
@@ -108,7 +111,7 @@ class Mod(object):
 
         Args:
             title_format (str): title of figure; if both keywords, `title`
-                and `title_format`, is used, `title` will be ignored
+                and `title_format`, is used, `title_format` will be ignored
             title (str): title of figure; alias to title_format
             xlabel (str): label on the x axis; will be inactive if ''
             ylabel (str): label on the y axis; will be inactive if ''
@@ -154,11 +157,14 @@ class Mod(object):
             toolbar_location (str): location of toolbar
                 either 'above', 'below', 'left', 'right' or None
 
-            legend_location (str): region where the legend resides
+            legend_position (str): region where the legend resides;
                 either 'top_left', 'top_center', 'top_right', 'center_left',
                 'center', 'center_right', 'bottom_left',
                 'bottom_center', 'bottom_right'
-            legend_location (str): either: 'horizontal', 'vertical'
+                if both keywords, `legend_position` and `legend_location`,
+                is used, `legend_position` will be ignored
+            legend_location (str): alias to legend_position; 
+            legend_orientation (str): either: 'horizontal', 'vertical'
             legend_background_fill_alpha (scalar): background opacity
             legend_border_line_alpha (scalar): border line opacity
             legend_label_standoff (scalar): space between labels and glyph
@@ -168,6 +174,8 @@ class Mod(object):
             colorbar (bool): show colorbar
             colorbar_n (int): number of colors in colorbar
             colorbar_cmap (str/mpl.cmap): colormap of colorbar
+            cmap (str/mpl.cmap): alias to colorbar_cmap;
+                takes priority over colorbar_cmap
             colorbar_title (str): title of colorbar
             colorbar_label_align (str): alignment of labels
                 either 'center', 'left', 'right'
@@ -190,10 +198,10 @@ class Mod(object):
             axiswise (bool): whether to have unique limits across axes
                 default False, each plot will not have their own axes
         """
-        if title_format != '':
-            self.title_format = title_format
-        elif title != '':
+        if title is not None:
             self.title_format = title
+        elif title_format is not None:
+            self.title_format = title_format
         else:
             self.title_format = DEFAULT_TITLE_FORMAT
 
@@ -227,7 +235,13 @@ class Mod(object):
         self.logo = logo
         self.toolbar_location = toolbar_location
 
-        self.legend_location = legend_location
+        if legend_location is not None:
+            self.legend_position = legend_location
+        elif legend_position is not None:
+            self.legend_position = legend_position
+        elif legend_position is None:
+            self.legend_position = 'top_right'
+
         self.legend_orientation = legend_orientation
         self.legend_background_fill_alpha = legend_background_fill_alpha
         self.legend_border_line_alpha = legend_border_line_alpha
@@ -237,7 +251,17 @@ class Mod(object):
 
         self.colorbar = colorbar
         self.colorbar_n = colorbar_n
-        self.colorbar_cmap = colorbar_cmap
+
+        if cmap is not None:
+            self.colorbar_cmap = cmap
+        else:
+            self.colorbar_cmap = colorbar_cmap
+
+        if zlim is not None:
+            self.colorbar_lim = zlim
+        else:
+            self.colorbar_lim = colorbar_lim
+
         self.colorbar_title = colorbar_title
         self.colorbar_label_align = colorbar_label_align
         self.colorbar_tick_alpha = colorbar_tick_alpha
@@ -253,6 +277,11 @@ class Mod(object):
         self.merge_tools = merge_tools
         self.framewise = framewise
         self.axiswise = axiswise
+
+        if finalize_hooks is not None:
+            self.finalize_hooks = finalize_hooks
+        else:
+            self.finalize_hooks = []
 
         self.plot_kwargs = plot_kwargs
 
@@ -274,9 +303,10 @@ class Mod(object):
             axis.text_alpha = self.label_alpha
             axis.text_font_style = self.label_style
         else:
-            if label == '':
+            if label is None:
                 label = axis.axis_label
-            axis.axis_label = self._neaten_label(label)
+            if label is not None:
+                axis.axis_label = self._neaten_label(label)
             axis.axis_label_text_font = self.label_font
             axis.axis_label_text_color = self.label_color
             axis.axis_label_text_alpha = self.label_alpha
@@ -449,7 +479,7 @@ class Mod(object):
         legend = p.legend
 
         legend.location = self._amend_loc_keyword(
-            self.legend_location, toolbar_io=False)
+            self.legend_position, toolbar_io=False)
         legend.orientation = self.legend_orientation
 
         legend.label_text_color = self.label_color
@@ -495,7 +525,7 @@ class Mod(object):
             self.height = DEFAULT_HEIGHT
 
         if rows != 1 or cols != 1:
-            self.height = int(self.height / (rows * 1.5))
+            self.height = int(self.height / rows)
 
         return rows, cols
 
@@ -590,7 +620,7 @@ class Mod(object):
             colorbar=self.colorbar,
             colorbar_opts=colorbar_dict,
             title_format=self.title_format,
-            finalize_hooks=[self._adjust_state],
+            finalize_hooks=self.finalize_hooks + [self._adjust_state],
             **self.plot_kwargs
         )
 
@@ -631,6 +661,21 @@ class Mod(object):
             norm_dict[figure] = generic_norm_dict
 
         obj = obj.opts(plot=plot_dict, style=style_dict, norm=norm_dict)
+
+        if self.colorbar_lim is not None:
+            if isinstance(self.colorbar_lim, dict):
+                obj = obj.redim.range(**self.colorbar_lim)
+            else:
+                try:
+                    obj_label = obj.vdims[0].label
+                    obj = obj.redim.range(
+                        **{obj_label: self.colorbar_lim})
+                except:
+                    for item in obj.items():
+                        try:
+                            item[-1].vdims[0].range = self.colorbar_lim
+                        except:
+                            item[-1].vdims.range = self.colorbar_lim
 
         if save != '':
             renderer = hv.renderer(BACKEND)
