@@ -663,11 +663,19 @@ class Mod(object):
         obj = obj.opts(plot=plot_dict, style=style_dict, norm=norm_dict)
 
         if self.colorbar_lim is not None:
-            try:
-                obj_label = obj.vdims[0].label
-                obj = obj.redim.range(**{obj_label: self.colorbar_lim})
-            except:
-                print('Cannot set colorbar limit! Please use redim.range!')
+            if isinstance(self.colorbar_lim, dict):
+                obj = obj.redim.range(**self.colorbar_lim)
+            else:
+                try:
+                    obj_label = obj.vdims[0].label
+                    obj = obj.redim.range(
+                        **{obj_label: self.colorbar_lim})
+                except:
+                    for item in obj.items():
+                        try:
+                            item[-1].vdims[0].range = self.colorbar_lim
+                        except:
+                            item[-1].vdims.range = self.colorbar_lim
 
         if save != '':
             renderer = hv.renderer(BACKEND)
