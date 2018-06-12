@@ -1,4 +1,9 @@
 ### 1.0.2
+Change title_format, title, xlabel, ylabel defaults in Mod from '' to None to better handle empty strings
+Add functionality to adjust the limits of colorbar without the need to call redim.range
+Add alias cmap (colorbar_cmap), legend_location (legend_position), zlim (colorbar_lim)
+Readjust the auto sizing for height
+Fix docstrings
 
 ### 1.0.1
 Optimize slightly by reading NCL cmaps only when called and fix minor bug with inputting colormap lists.
