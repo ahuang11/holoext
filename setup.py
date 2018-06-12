@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='holoext',
-      version='1.0.1',
+      version='1.0.2',
       description='Holoviews Extension',
       url='http://github.com/ahuang11/holoext',
       author='Andrew Huang',
