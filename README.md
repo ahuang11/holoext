@@ -1,4 +1,4 @@
-# HoloExt - HoloViews Extension Mod v1.0.2
+# HoloExt - HoloViews Extension Mod v1.0.3
 
 ### An extension to beautify your plots and process.
 
