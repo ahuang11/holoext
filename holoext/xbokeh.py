@@ -8,7 +8,10 @@ from bokeh import models
 from bokeh.io import export_svgs
 from bokeh.plotting.helpers import _tool_from_string
 from holoviews.plotting.bokeh.__init__ import associations
-from geoviews.plotting.bokeh.__init__ import options
+try:
+    from geoviews.plotting.bokeh.__init__ import options
+except:
+    pass
 
 from holoext.utils import DEFAULT_N, get_cmap, flatten, tidy_fn
 
