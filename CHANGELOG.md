@@ -1,3 +1,10 @@
+### 1.0.4
+Allow from `from holoext import Mod` and `from holoext import get_cmap`
+Hide UserWarning from `matplotlib.use('agg')` if matplotlib.pyplot is already imported
+
+### 1.0.3
+Attempt fixing docs
+
 ### 1.0.2
 Change title_format, title, xlabel, ylabel defaults in Mod from '' to None to better handle empty strings
 Add functionality to adjust the limits of colorbar without the need to call redim.range

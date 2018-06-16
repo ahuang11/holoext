@@ -1,8 +1,13 @@
 import os
 import numpy as np
 import pandas as pd
+import warnings
 import matplotlib
-matplotlib.use('agg')
+
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", UserWarning)
+    matplotlib.use('agg')
+
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap, rgb2hex
 
