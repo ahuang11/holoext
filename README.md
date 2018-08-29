@@ -1,6 +1,7 @@
 # HoloExt - HoloViews Extension Mod v1.0.4
 
 ### An extension to beautify your plots and process.
+### Note that this package is now deprecated with the advent of hvPlot https://hvplot.pyviz.org/
 
 ## HoloExt features:
 1. 'intelligent' resizing and activation of tools in addition to grid lines
