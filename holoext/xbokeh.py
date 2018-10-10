@@ -76,7 +76,7 @@ class Mod(object):
             toolbar_location='above',
             legend_position=None,
             legend_location=None,
-            legend_orientation='horizontal',
+            legend_orientation='vertical',
             legend_background_fill_alpha=0.5,
             legend_border_line_alpha=0,
             legend_label_standoff=6,
@@ -577,7 +577,7 @@ class Mod(object):
 
             export_svgs(figure, save_fp)
 
-    def apply(self, obj, save='', fmt=None):
+    def apply(self, obj, save='', fmt=None, figures=None):
         """Applies settings from Mod() to a HoloViews object
 
         Args:
@@ -587,6 +587,7 @@ class Mod(object):
             fmt (str): format of output file;
                 choices are: ['html', 'json', 'auto', 'png',
                 'widgets', 'scrubber', 'auto']
+            figures (list): figures to modify
         """
         rows, cols = self._scale_plots(obj)
         label_sizes = self._scale_labels(obj, rows, cols)
@@ -655,7 +656,14 @@ class Mod(object):
         plot_dict = {}
         style_dict = {}
         norm_dict = {}
-        for figure in FIGURES:
+
+        if figures is None:
+            figures = FIGURES
+        else:
+            if isinstance(figures, str):
+                figures = [figures]
+
+        for figure in figures:
             if figure != 'Table':
                 plot_dict[figure] = generic_plot_dict
             else:
